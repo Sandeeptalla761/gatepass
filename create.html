@@ -198,7 +198,9 @@
 
 <!-- ---------- AFTER SAVE ---------- -->
 <div id="done" class="hide card">
+  <div id="saveTag" style="font-size:13px;margin-bottom:8px">&nbsp;</div>
   <button onclick="window.print()">Print / save as PDF</button>
+  <button id="btnRetry" class="hide" onclick="retrySave()">Retry save</button>
   <button class="grey" onclick="newPass()">Create another</button>
   <button class="grey" onclick="location.href='./'">Go to scanner</button>
 </div>
@@ -259,6 +261,7 @@ var ENDPOINT = 'https://script.google.com/macros/s/AKfycbxC2PLcTyniQ4u-aivhOQs67
 
 var PIN='', WHO='', busy=false;
 var LAST_GP='';
+var LAST_SAVE=null;
 
 function call(b){
   return fetch(ENDPOINT,{method:'POST',body:JSON.stringify(b),redirect:'follow'})
@@ -273,7 +276,7 @@ function unlock(){
   if(!who){ say('bad','Enter your name',''); return; }
 
   say('busy','Checking\u2026','');
-  call({action:'nextgp',pin:pin}).then(function(r){
+  withTimeout(call({action:'nextgp',pin:pin}), 25000).then(function(r){
     if(!r.ok){ say('bad','Wrong PIN','Ask the stores in-charge.'); return; }
     PIN=pin; WHO=who;
     document.getElementById('gate').className='hide';
@@ -388,26 +391,83 @@ function createPass(){
 
   var payload=buildPayload(f,items);
 
-  busy=true;
-  document.getElementById('btnSave').disabled=true;
-  say('busy','Saving to the sheet\u2026','');
+  // Build and show the pass FIRST. It is drawn entirely in this browser,
+  // so it must never wait on the sheet — a slow or failed save should not
+  // cost you the printed document.
+  render(f,items,payload);
+  document.getElementById('form').className='hide';
+  document.getElementById('done').className='card';
+  setSaveState('saving');
 
-  call({action:'out',pin:PIN,by:WHO,payload:payload,
-        returnable: f.type==='R'})
+  busy=true;
+  say('busy','Pass ready \u2014 saving to the sheet\u2026',
+      'You can print now; the save is still running.');
+
+  withTimeout(call({action:'out',pin:PIN,by:WHO,payload:payload,
+                    returnable: f.type==='R'}), 40000)
   .then(function(r){
     busy=false;
-    document.getElementById('btnSave').disabled=false;
-    if(!r.ok){ say('bad','Not saved',esc(r.msg)); return; }
-    render(f,items,payload);
-    say('ok','Gate pass '+esc(f.gp)+' saved',
+    if(!r.ok){
+      setSaveState('failed');
+      say('bad','Printed pass is fine, but the sheet was NOT updated',
+          esc(r.msg)+'<br>Use <b>Retry save</b> below before handing the '+
+          'pass over, or the material will not be tracked.');
+      return;
+    }
+    setSaveState('saved');
+    say('ok','Gate pass '+esc(f.gp)+' saved and ready',
         r.count+' material row'+(r.count>1?'s':'')+' written from row '+
-        r.firstRow+'. Print it below.');
-    document.getElementById('form').className='hide';
-    document.getElementById('done').className='card';
+        r.firstRow+' \u00b7 status '+esc(r.status)+'. Print it below.');
   }).catch(function(e){
     busy=false;
-    document.getElementById('btnSave').disabled=false;
-    say('bad','Connection problem',esc(String(e))+'<br>Nothing was saved.');
+    setSaveState('failed');
+    say('bad','Printed pass is fine, but the sheet was NOT updated',
+        esc(String(e))+'<br>Use <b>Retry save</b> below before handing '+
+        'the pass over, or the material will not be tracked.');
+  });
+
+  LAST_SAVE = {payload:payload, returnable:f.type==='R', gp:f.gp};
+}
+
+/** Apps Script can hang; never leave the user staring at a spinner. */
+function withTimeout(p, ms){
+  return Promise.race([p, new Promise(function(_,rej){
+    setTimeout(function(){
+      rej(new Error('No reply from the sheet after '+Math.round(ms/1000)+
+                    ' seconds.'));
+    }, ms);
+  })]);
+}
+
+function setSaveState(state){
+  var b=document.getElementById('btnRetry');
+  var t=document.getElementById('saveTag');
+  if(state==='saving'){ t.textContent='Saving to sheet\u2026';
+                        t.style.color='#9aa4b0'; b.className='hide'; }
+  if(state==='saved'){  t.textContent='\u2713 Saved to sheet';
+                        t.style.color='#34a853'; b.className='hide'; }
+  if(state==='failed'){ t.textContent='\u2717 NOT saved to sheet';
+                        t.style.color='#ea4335'; b.className='grey'; }
+}
+
+function retrySave(){
+  if(busy || !LAST_SAVE) return;
+  busy=true;
+  setSaveState('saving');
+  say('busy','Retrying\u2026','');
+
+  withTimeout(call({action:'out',pin:PIN,by:WHO,payload:LAST_SAVE.payload,
+                    returnable:LAST_SAVE.returnable}), 40000)
+  .then(function(r){
+    busy=false;
+    if(!r.ok){ setSaveState('failed'); say('bad','Still not saved',esc(r.msg)); return; }
+    setSaveState('saved');
+    say('ok','Saved \u2014 GP '+esc(LAST_SAVE.gp),
+        r.count+' row(s) written from row '+r.firstRow+'.');
+  }).catch(function(e){
+    busy=false;
+    setSaveState('failed');
+    say('bad','Still not saved',esc(String(e)));
   });
 }
 
