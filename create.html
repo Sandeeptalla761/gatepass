@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create Material Gate Pass — TVL</title>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1419; --card:#1a2027; --line:#2a333d;
+    --ink:#e8eaed; --dim:#9aa4b0;
+    --ok:#34a853; --bad:#ea4335; --blue:#4285f4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0 auto;padding:14px;max-width:900px;background:var(--bg);
+       color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,
+       "Segoe UI",Roboto,sans-serif}
+  h1{font-size:18px;margin:4px 0 14px}
+  h1 span{color:var(--dim);font-weight:400;font-size:13px;display:block;margin-top:2px}
+
+  .card{background:var(--card);border:1px solid var(--line);
+        border-radius:12px;padding:16px;margin-bottom:12px}
+  .lbl{color:var(--dim);font-size:11px;text-transform:uppercase;
+       letter-spacing:.8px;margin-bottom:6px}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:620px){ .grid{grid-template-columns:1fr} }
+
+  input,select,textarea{width:100%;padding:11px;border-radius:9px;
+    border:1px solid var(--line);background:#11161c;color:var(--ink);
+    font:15px/1.4 inherit}
+  input.pin{font-size:22px;letter-spacing:8px;text-align:center}
+
+  button{padding:14px;border:0;border-radius:10px;font:600 15px inherit;
+         color:#fff;background:var(--blue);cursor:pointer;width:100%;margin-top:10px}
+  button.grey{background:#5f6368}
+  button.green{background:var(--ok)}
+  button.sm{width:auto;padding:8px 14px;font-size:13px;margin:0}
+  button:active{opacity:.75}
+  button:disabled{opacity:.4}
+
+  table.items{width:100%;border-collapse:collapse;margin-top:4px}
+  table.items th{font-size:10px;color:var(--dim);text-transform:uppercase;
+                 letter-spacing:.6px;text-align:left;padding:0 6px 6px 0;font-weight:600}
+  table.items td{padding:0 6px 8px 0;vertical-align:top}
+  table.items input{padding:9px}
+  .del{background:none;border:0;color:var(--bad);font-size:20px;
+       cursor:pointer;padding:6px;width:auto;margin:0}
+
+  .status{padding:12px;border-radius:10px;margin-bottom:12px;
+          display:none;border-left:4px solid}
+  .status.on{display:block}
+  .status.ok{background:rgba(52,168,83,.14);border-color:var(--ok)}
+  .status.bad{background:rgba(234,67,53,.14);border-color:var(--bad)}
+  .status.busy{background:rgba(66,133,244,.14);border-color:var(--blue)}
+  .status b{display:block;font-size:15px;margin-bottom:3px}
+
+  .hide{display:none}
+  .foot{color:var(--dim);font-size:12px;text-align:center;margin-top:14px}
+  .foot a{color:var(--blue);text-decoration:none}
+
+  /* ============ THE PRINTED PASS ============ */
+  #pass{background:#fff;color:#000;padding:16mm 14mm;margin:0 auto;
+        width:210mm;min-height:148mm;font:11px/1.4 Arial,Helvetica,sans-serif}
+  #pass .t1{font-size:15px;font-weight:700;letter-spacing:.5px}
+  #pass .t2{font-size:15px;font-weight:700;text-align:center}
+  #pass .t3{font-size:14px;font-weight:700;text-align:center}
+  #pass .addr{text-align:center;font-size:10px;margin-top:6px}
+  #pass .meta{display:flex;justify-content:space-between;margin-top:16px;gap:24px}
+  #pass .meta table{border-collapse:collapse;font-size:11px}
+  #pass .meta td{padding:4px 10px 4px 0;border-bottom:1px solid #ddd}
+  #pass .meta td.k{color:#333;white-space:nowrap}
+  #pass .meta td.v{font-weight:600}
+  #pass table.mat{width:100%;border-collapse:collapse;margin-top:18px;font-size:10.5px}
+  #pass table.mat th{text-align:left;border-bottom:1.2px solid #000;
+                     padding:5px 6px;font-size:10px}
+  #pass table.mat td{padding:5px 6px;border-bottom:1px solid #e5e5e5}
+  #pass table.mat td.n,#pass table.mat th.n{text-align:center;width:34px}
+  #pass table.mat td.q,#pass table.mat th.q{text-align:center;width:44px}
+  #pass table.mat td.u,#pass table.mat th.u{text-align:center;width:44px}
+  #pass .sign{display:flex;justify-content:space-between;
+              align-items:flex-end;margin-top:26px}
+  #pass .sign .who{font-size:10px}
+  #pass .sign .who b{display:block;margin-top:22px;font-size:11px}
+  #pass .qrbox{text-align:center}
+  #pass .qrbox canvas{display:block}
+  #pass .qrbox .cap{font-size:8px;color:#555;margin-top:3px}
+
+  @media print{
+    body{background:#fff;padding:0;max-width:none}
+    .noprint{display:none!important}
+    #pass{width:auto;padding:10mm}
+    @page{size:A4;margin:8mm}
+  }
+</style>
+</head>
+<body>
+
+<div class="noprint">
+<h1>Create Material Gate Pass
+  <span>Outward &ndash; Returnable &middot; Trans Valves (India) Pvt Ltd</span></h1>
+
+<div id="status" class="status"></div>
+
+<!-- ---------- PIN ---------- -->
+<div id="gate" class="card">
+  <div class="lbl">Enter PIN</div>
+  <input id="pin" class="pin" type="tel" inputmode="numeric" maxlength="8"
+         autocomplete="off" placeholder="&bull;&bull;&bull;&bull;">
+  <div class="lbl" style="margin-top:14px">Your name</div>
+  <input id="who" type="text" autocomplete="name" placeholder="e.g. Suresh Nayak">
+  <button onclick="unlock()">Unlock</button>
+</div>
+
+<!-- ---------- FORM ---------- -->
+<div id="form" class="hide">
+  <div class="card">
+    <div class="grid">
+      <div>
+        <div class="lbl">Request No.</div>
+        <input id="fGp" type="text" placeholder="auto">
+      </div>
+      <div>
+        <div class="lbl">Request date</div>
+        <input id="fDate" type="date">
+      </div>
+      <div>
+        <div class="lbl">Department</div>
+        <input id="fDept" type="text" value="STORES">
+      </div>
+      <div>
+        <div class="lbl">Due date</div>
+        <input id="fDue" type="date">
+      </div>
+      <div>
+        <div class="lbl">Supplier name</div>
+        <input id="fSup" type="text" placeholder="e.g. BALAJI ENGINEERING WORKS, BALANAGAR HYDERABAD">
+      </div>
+      <div>
+        <div class="lbl">Vehicle no.</div>
+        <input id="fVeh" type="text" value="PERSONAL COLLECTION">
+      </div>
+      <div>
+        <div class="lbl">Requestor</div>
+        <input id="fReq" type="text" placeholder="e.g. SURESH NAYAK">
+      </div>
+      <div>
+        <div class="lbl">Type</div>
+        <select id="fType">
+          <option value="R">Returnable</option>
+          <option value="N">Non-returnable</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="lbl">Materials</div>
+    <table class="items">
+      <thead><tr>
+        <th style="width:34%">Material name</th>
+        <th style="width:30%">Remarks</th>
+        <th style="width:14%">Unit</th>
+        <th style="width:14%">Qty</th>
+        <th></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <button class="grey sm" style="margin-top:10px" onclick="addRow()">
+      + Add material</button>
+  </div>
+
+  <div class="card">
+    <button class="green" id="btnSave" onclick="createPass()">
+      Save to sheet &amp; generate pass</button>
+    <button class="grey" onclick="location.href='./'">Go to scanner</button>
+  </div>
+
+  <div class="foot">Scanner: <a href="./">sandeeptalla761.github.io/gatepass</a></div>
+</div>
+
+<!-- ---------- AFTER SAVE ---------- -->
+<div id="done" class="hide card">
+  <button onclick="window.print()">Print / save as PDF</button>
+  <button class="grey" onclick="newPass()">Create another</button>
+  <button class="grey" onclick="location.href='./'">Go to scanner</button>
+</div>
+</div>
+
+<!-- ---------- THE PASS ITSELF ---------- -->
+<div id="pass" class="hide">
+  <div class="t1">MATERIAL GATE PASS</div>
+  <div class="t2" style="margin-top:10px" id="pType">Outward - Returnable</div>
+  <div class="t3">Trans Valves (INDIA) Pvt Ltd</div>
+  <div class="addr">
+    15-B, Road No. 12, S.V.C.I.E, Phase I, IDA, Jeedimetla. Hyderabad, Telangana<br>
+    GSTIN/UIN: 36AAACT8370M1ZU
+  </div>
+
+  <div class="meta">
+    <table>
+      <tr><td class="k">Request No.:</td><td class="v" id="pGp"></td></tr>
+      <tr><td class="k">Request Date:</td><td class="v" id="pDate"></td></tr>
+      <tr><td class="k">Department:</td><td class="v" id="pDept"></td></tr>
+      <tr><td class="k">Status:</td><td class="v" id="pStatus"></td></tr>
+    </table>
+    <table>
+      <tr><td class="k">Supplier Name.:</td><td class="v" id="pSup"></td></tr>
+      <tr><td class="k">Vehicle No:</td><td class="v" id="pVeh"></td></tr>
+      <tr><td class="k">Due Date:</td><td class="v" id="pDue"></td></tr>
+    </table>
+  </div>
+
+  <table class="mat">
+    <thead><tr>
+      <th class="n">Sl No.</th><th>Material Name</th><th>Remarks</th>
+      <th class="u">Unit</th><th class="q">Qty</th>
+    </tr></thead>
+    <tbody id="pRows"></tbody>
+  </table>
+
+  <div class="sign">
+    <div class="who">Requestor<b id="pReq"></b></div>
+    <div class="who">Authoriser<b>&nbsp;</b></div>
+    <div class="qrbox">
+      <canvas id="pQr"></canvas>
+      <div class="cap" id="pCap"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+var ENDPOINT = 'https://script.google.com/macros/s/AKfycbxC2PLcTyniQ4u-aivhOQs67t1ReurvDG9J9BQRJKhGMGKatTYEudcwEu_RGt_ueEKjzA/exec';
+
+var PIN='', WHO='', busy=false;
+
+function call(b){
+  return fetch(ENDPOINT,{method:'POST',body:JSON.stringify(b),redirect:'follow'})
+    .then(function(r){ return r.json(); });
+}
+
+/* ---------- unlock ---------- */
+function unlock(){
+  var pin=document.getElementById('pin').value.trim();
+  var who=document.getElementById('who').value.trim();
+  if(!pin){ say('bad','Enter the PIN',''); return; }
+  if(!who){ say('bad','Enter your name',''); return; }
+
+  say('busy','Checking\u2026','');
+  call({action:'nextgp',pin:pin}).then(function(r){
+    if(!r.ok){ say('bad','Wrong PIN','Ask the stores in-charge.'); return; }
+    PIN=pin; WHO=who;
+    document.getElementById('gate').className='hide';
+    document.getElementById('form').className='';
+    document.getElementById('fGp').value=r.next;
+    document.getElementById('fReq').value=who.toUpperCase();
+    setToday();
+    if(!document.getElementById('rows').children.length){ addRow(); addRow(); }
+    say('busy','Ready','Fill the details and add the materials.');
+  }).catch(function(e){
+    say('bad','Cannot reach the server',esc(String(e)));
+  });
+}
+
+function setToday(){
+  var d=new Date();
+  document.getElementById('fDate').value=iso(d);
+  var due=new Date(d.getTime()+20*86400000);      // 20 days is the usual term
+  document.getElementById('fDue').value=iso(due);
+}
+
+function iso(d){
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+}
+function pad(n){ return (n<10?'0':'')+n; }
+
+/* ---------- material rows ---------- */
+function addRow(){
+  var tb=document.getElementById('rows');
+  var tr=document.createElement('tr');
+  tr.innerHTML =
+    '<td><input class="m-name" type="text" placeholder="MS 250 X 100 X 20"></td>'+
+    '<td><input class="m-rem" type="text" placeholder="FOR MAKING L TYPE FIXTURE"></td>'+
+    '<td><input class="m-uom" type="text" value="Pcs"></td>'+
+    '<td><input class="m-qty" type="number" min="1" value="1"></td>'+
+    '<td><button class="del" onclick="delRow(this)">&times;</button></td>';
+  tb.appendChild(tr);
+}
+
+function delRow(btn){
+  var tr = btn.parentNode.parentNode;
+  tr.parentNode.removeChild(tr);
+}
+
+function collect(){
+  var out=[];
+  var trs=document.getElementById('rows').querySelectorAll('tr');
+  for(var i=0;i<trs.length;i++){
+    var name=trs[i].querySelector('.m-name').value.trim();
+    if(!name) continue;
+    out.push({
+      name:name,
+      rem: trs[i].querySelector('.m-rem').value.trim(),
+      uom: trs[i].querySelector('.m-uom').value.trim() || 'Pcs',
+      qty: Number(trs[i].querySelector('.m-qty').value) || 1
+    });
+  }
+  return out;
+}
+
+/* ---------- payload ---------- */
+function scrub(v){
+  return String(v||'').replace(/[|~^\n\r]/g,' ').replace(/\s+/g,' ').trim();
+}
+
+function ymd(isoStr){
+  if(!isoStr) return '';
+  var p=isoStr.split('-');
+  return p[0].substring(2)+p[1]+p[2];
+}
+
+function dmy(isoStr){
+  if(!isoStr) return '';
+  var p=isoStr.split('-');
+  return p[2]+'/'+p[1]+'/'+p[0];
+}
+
+function buildPayload(f,items){
+  return ['GP', ymd(f.date), scrub(f.gp), scrub(f.sup),
+          items.map(function(it){
+            return scrub(it.name)+'^'+it.qty+'^'+scrub(it.uom).toUpperCase();
+          }).join('~'),
+          scrub(f.veh), f.type==='R' ? ymd(f.due) : ''
+         ].join('|');
+}
+
+/* ---------- save + render ---------- */
+function createPass(){
+  if(busy) return;
+
+  var f={
+    gp:   document.getElementById('fGp').value.trim(),
+    date: document.getElementById('fDate').value,
+    dept: document.getElementById('fDept').value.trim(),
+    due:  document.getElementById('fDue').value,
+    sup:  document.getElementById('fSup').value.trim(),
+    veh:  document.getElementById('fVeh').value.trim(),
+    req:  document.getElementById('fReq').value.trim(),
+    type: document.getElementById('fType').value
+  };
+
+  if(!f.gp){   say('bad','Request No. is blank',''); return; }
+  if(!f.date){ say('bad','Request date is blank',''); return; }
+  if(!f.sup){  say('bad','Supplier name is blank',''); return; }
+  if(f.type==='R' && !f.due){ say('bad','Due date is blank',
+      'Returnable material needs a due date.'); return; }
+
+  var items=collect();
+  if(!items.length){ say('bad','No materials','Add at least one material.'); return; }
+
+  var payload=buildPayload(f,items);
+
+  busy=true;
+  document.getElementById('btnSave').disabled=true;
+  say('busy','Saving to the sheet\u2026','');
+
+  call({action:'out',pin:PIN,by:WHO,payload:payload,
+        returnable: f.type==='R'})
+  .then(function(r){
+    busy=false;
+    document.getElementById('btnSave').disabled=false;
+    if(!r.ok){ say('bad','Not saved',esc(r.msg)); return; }
+    render(f,items,payload);
+    say('ok','Gate pass '+esc(f.gp)+' saved',
+        r.count+' material row'+(r.count>1?'s':'')+' written from row '+
+        r.firstRow+'. Print it below.');
+    document.getElementById('form').className='hide';
+    document.getElementById('done').className='card';
+  }).catch(function(e){
+    busy=false;
+    document.getElementById('btnSave').disabled=false;
+    say('bad','Connection problem',esc(String(e))+'<br>Nothing was saved.');
+  });
+}
+
+function render(f,items,payload){
+  document.getElementById('pType').textContent =
+    f.type==='R' ? 'Outward - Returnable' : 'Outward - Non Returnable';
+  document.getElementById('pGp').textContent=f.gp;
+  document.getElementById('pDate').textContent=dmy(f.date);
+  document.getElementById('pDept').textContent=f.dept;
+  document.getElementById('pStatus').textContent =
+    f.type==='R' ? 'Return Pending' : 'Non Returnable';
+  document.getElementById('pSup').textContent=f.sup;
+  document.getElementById('pVeh').textContent=f.veh;
+  document.getElementById('pDue').textContent = f.type==='R' ? dmy(f.due) : '-';
+  document.getElementById('pReq').textContent=f.req;
+
+  document.getElementById('pRows').innerHTML = items.map(function(it,i){
+    return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(it.name)+'</td>'+
+           '<td>'+esc(it.rem)+'</td><td class="u">'+esc(it.uom)+'</td>'+
+           '<td class="q">'+it.qty+'</td></tr>';
+  }).join('');
+
+  document.getElementById('pCap').textContent='GP '+f.gp;
+  document.getElementById('pass').className='';
+
+  QRCode.toCanvas(document.getElementById('pQr'), payload,
+    { errorCorrectionLevel:'M', margin:2, width:110 },
+    function(err){
+      if(err) say('bad','QR could not be drawn',
+                  esc(String(err))+'<br>The sheet row WAS saved.');
+    });
+}
+
+function newPass(){
+  document.getElementById('pass').className='hide';
+  document.getElementById('done').className='hide';
+  document.getElementById('form').className='';
+  document.getElementById('rows').innerHTML='';
+  document.getElementById('fSup').value='';
+  addRow(); addRow();
+  call({action:'nextgp',pin:PIN}).then(function(r){
+    if(r.ok) document.getElementById('fGp').value=r.next;
+  }).catch(function(){});
+  setToday();
+  say('busy','Ready','Fill the details and add the materials.');
+}
+
+/* ---------- helpers ---------- */
+function say(kind,title,detail){
+  var el=document.getElementById('status');
+  el.className='status on '+kind;
+  el.innerHTML='<b>'+title+'</b>'+(detail||'');
+}
+
+function esc(s){
+  return String(s==null?'':s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+document.getElementById('pin').addEventListener('keydown',function(e){
+  if(e.key==='Enter') document.getElementById('who').focus();
+});
+document.getElementById('who').addEventListener('keydown',function(e){
+  if(e.key==='Enter') unlock();
+});
+</script>
+</body>
+</html>
