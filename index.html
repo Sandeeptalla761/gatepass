@@ -116,20 +116,6 @@
     <a href="#" onclick="lock();return false;">change</a></div>
 </div>
 
-<!-- ============ 3. RETURNABLE / NON-RETURNABLE ============ -->
-<div id="choose" class="hide">
-  <div class="card">
-    <div class="gpno">GATE PASS <span id="chGp"></span></div>
-    <div id="chHdr"></div>
-  </div>
-  <div class="card">
-    <div class="lbl">Is this material returnable?</div>
-    <button class="green" onclick="chooseReturnable()">RETURNABLE</button>
-    <button class="amber" onclick="chooseNonReturnable()">NON-RETURNABLE</button>
-    <button class="grey" onclick="backToScan()">Cancel</button>
-  </div>
-</div>
-
 <!-- ============ 4A. NEW OUTWARD ============ -->
 <div id="outward" class="hide">
   <div class="card">
@@ -137,11 +123,11 @@
     <div id="oHdr"></div>
   </div>
   <div class="card">
-    <div class="lbl">Items going out</div>
+    <div class="lbl">Confirm what is going out</div>
     <div id="oItems"></div>
   </div>
   <div class="card">
-    <button class="green" id="oSave" onclick="saveOut()">Save to sheet</button>
+    <button class="green" id="oSave" onclick="saveGateOut()">Record gate out</button>
     <button class="grey" onclick="backToScan()">Cancel</button>
   </div>
 </div>
@@ -191,7 +177,7 @@ function call(body){
 
 /* ---------- screens ---------- */
 function show(id){
-  ['gate','scan','choose','outward','receipt'].forEach(function(s){
+  ['gate','scan','outward','receipt'].forEach(function(s){
     document.getElementById(s).className = (s===id) ? '' : 'hide';
   });
 }
@@ -207,7 +193,7 @@ function backToScan(){
 /* ---------- PIN ---------- */
 function unlock(){
   var pin=document.getElementById('pin').value.trim();
-  var who=document.getElementById('who').value.trim();
+  var who=document.getElementById('who').value.trim().toUpperCase();
   if(!pin){ say('bad','Enter the PIN',''); return; }
   if(!who){ say('bad','Enter your name','Every entry records who scanned it.'); return; }
 
@@ -289,13 +275,12 @@ function lookup(payload){
     }
     stop();
     CURRENT=r; PAYLOAD=payload;
-    document.getElementById('chGp').textContent=r.gpNo;
-    document.getElementById('chHdr').innerHTML=headerHtml(r);
-    show('choose');
-    say('busy', r.mode==='new' ? 'New gate pass' : 'Already in the sheet',
-        r.mode==='new'
-          ? 'Choose returnable or non-returnable.'
-          : 'Choose RETURNABLE to record what has come back.');
+
+    if(r.mode==='gateout'){
+      showGateOut();
+    } else {
+      showReceipt();
+    }
   }).catch(function(e){
     busy=false;
     say('bad','Connection problem',esc(String(e))+'<br>Nothing was saved.');
@@ -310,65 +295,72 @@ function headerHtml(r){
          '<div class="hdr"><span class="k">Due back</span><b>'+esc(r.due||'-')+'</b></div>';
 }
 
-/* ---------- step 2: the choice ---------- */
-function chooseReturnable(){
-  if(!CURRENT) return;
-  if(CURRENT.mode==='new'){ showOutward(true); }
-  else { showReceipt(); }
-}
+/* ---------- gate out: material physically leaving ---------- */
 
-function chooseNonReturnable(){
-  if(!CURRENT) return;
-  if(CURRENT.mode==='new'){ showOutward(false); return; }
-  say('bad','Already recorded',
-      'Gate pass '+esc(CURRENT.gpNo)+' is in the sheet. To record a return, '+
-      'choose RETURNABLE.');
-}
-
-/* ---------- 4A: new outward ---------- */
-var OUT_RETURNABLE=true;
-
-function showOutward(returnable){
-  OUT_RETURNABLE=returnable;
+function showGateOut(){
   var r=CURRENT;
   document.getElementById('oGp').textContent=r.gpNo;
   document.getElementById('oHdr').innerHTML =
     headerHtml(r) +
-    '<div style="margin-top:9px"><span class="pill '+(returnable?'y':'n')+'">'+
-    (returnable?'RETURNABLE':'NON-RETURNABLE')+'</span></div>';
+    '<div style="margin-top:9px"><span class="pill y">PENDING GATE OUT</span></div>';
 
-  document.getElementById('oItems').innerHTML = r.items.map(function(it,i){
-    return '<div class="it"><div class="nm">'+(i+1)+'. '+esc(it.name)+'</div>'+
-           '<div class="sub">Qty '+esc(it.qty)+' '+esc(it.uom)+'</div></div>';
+  document.getElementById('oItems').innerHTML = r.rows.map(function(it,i){
+    return '<div class="it">'+
+      '<div class="nm">'+(i+1)+'. '+esc(it.name)+'</div>'+
+      '<div class="sub">On the pass: '+it.planned+' '+esc(it.uom)+'</div>'+
+      '<div class="ctl">'+
+      '<input type="checkbox" id="gk'+i+'" checked onchange="syncOut('+i+')">'+
+      '<label for="gk'+i+'">Going out</label>'+
+      '<input type="number" id="gq'+i+'" min="0" value="'+it.planned+'">'+
+      '<span class="sub">'+esc(it.uom)+'</span></div>'+
+      '</div>';
   }).join('');
 
   document.getElementById('oSave').textContent =
-    'Save '+r.items.length+' item'+(r.items.length>1?'s':'')+' to sheet';
+    'Record gate out \u2014 '+r.rows.length+' item'+(r.rows.length>1?'s':'');
   show('outward');
-  say('busy','Check the details','Then save.');
+  say('busy','Material going out',
+      'Check each quantity against what is physically leaving, then record it.');
 }
 
-function saveOut(){
+function syncOut(i){
+  document.getElementById('gq'+i).disabled =
+    !document.getElementById('gk'+i).checked;
+}
+
+function saveGateOut(){
   if(busy) return;
+
+  var lines=[];
+  CURRENT.rows.forEach(function(it,i){
+    var ck=document.getElementById('gk'+i);
+    if(!ck || !ck.checked) return;
+    var q=Number(document.getElementById('gq'+i).value);
+    if(q>0) lines.push({row:it.row, qty:q});
+  });
+
+  if(!lines.length){ say('bad','Nothing selected',
+      'Tick at least one item, or cancel.'); return; }
+
   busy=true;
   document.getElementById('oSave').disabled=true;
-  say('busy','Saving\u2026','');
+  say('busy','Recording\u2026','');
 
-  call({action:'out',pin:PIN,by:WHO,payload:PAYLOAD,returnable:OUT_RETURNABLE})
+  call({action:'gateout',pin:PIN,by:WHO,gpNo:CURRENT.gpNo,lines:lines})
   .then(function(r){
     busy=false;
     document.getElementById('oSave').disabled=false;
     if(r.authFail){ lock(); say('bad','Session locked',esc(r.msg)); return; }
-    if(!r.ok){ say('bad','Not saved',esc(r.msg)); return; }
+    if(!r.ok){ say('bad','Not recorded',esc(r.msg)); return; }
     if(navigator.vibrate) navigator.vibrate([50,60,50]);
-    say('ok','Saved \u2014 GP '+esc(r.gpNo),
-        r.count+' item row'+(r.count>1?'s':'')+' written from row '+r.firstRow+
-        '<br>Status: <b>'+esc(r.status)+'</b>');
-    setTimeout(backToScan,1800);
+    say('ok','Gate out recorded \u2014 GP '+esc(r.gpNo),
+        r.count+' item'+(r.count>1?'s':'')+' out \u00b7 status '+esc(r.status)+
+        '<br>Scan this pass again when material comes back.');
+    setTimeout(backToScan,2000);
   }).catch(function(e){
     busy=false;
     document.getElementById('oSave').disabled=false;
-    say('bad','Connection problem',esc(String(e))+'<br>Nothing was saved.');
+    say('bad','Connection problem',esc(String(e))+'<br>Nothing was recorded.');
   });
 }
 
@@ -492,7 +484,7 @@ function statusPill(s){
   var c = s.indexOf('RECEIVED')===0 ? 'g'
         : s.indexOf('DUE FOR')===0  ? 'r'
         : s.indexOf('NOT DUE')===0  ? 'y'
-        : s.indexOf('NON-')===0     ? 'n' : '';
+        : s.indexOf('PENDING')===0  ? 'n' : '';
   return c ? '<span class="pill '+c+'">'+esc(s)+'</span>' : '';
 }
 
