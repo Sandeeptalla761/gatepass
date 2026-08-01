@@ -4,11 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Create Material Gate Pass — TVL</title>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<!-- QR encoder. Served from this repo so it works even if CDNs are
+     blocked; falls back to jsDelivr if the local file is missing. -->
+<script src="./qrcode.js"></script>
 <script>
-  // If jsDelivr is blocked on the factory network, fall back to unpkg.
-  if (typeof QRCode === "undefined") {
-    document.write('<scr'+'ipt src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"><\/scr'+'ipt>');
+  if (typeof qrcode === "undefined") {
+    document.write('<scr'+'ipt src="https://cdn.jsdelivr.net/npm/'+
+                   'qrcode-generator@1.4.4/qrcode.js"><\/scr'+'ipt>');
   }
 </script>
 <style>
@@ -74,7 +76,8 @@
   #pass .t2{font-size:15px;font-weight:700;text-align:center}
   #pass .t3{font-size:14px;font-weight:700;text-align:center}
   #pass .addr{text-align:center;font-size:10px;margin-top:6px}
-  #pass .meta{display:flex;justify-content:space-between;margin-top:16px;gap:24px}
+  #pass .meta{display:flex;justify-content:space-between;margin-top:16px;gap:18px;
+              align-items:flex-start}
   #pass .meta table{border-collapse:collapse;font-size:11px}
   #pass .meta td{padding:4px 10px 4px 0;border-bottom:1px solid #ddd}
   #pass .meta td.k{color:#333;white-space:nowrap}
@@ -93,8 +96,10 @@
               align-items:flex-end;margin-top:26px}
   #pass .sign .who{font-size:10px}
   #pass .sign .who b{display:block;margin-top:22px;font-size:11px}
-  #pass .qrbox{text-align:center}
-  #pass .qrbox canvas{display:block}
+  #pass .qrbox{text-align:center;flex:0 0 auto}
+  #pass .qrbox img{display:block;width:30mm;height:30mm;
+                   image-rendering:pixelated;image-rendering:crisp-edges}
+  #pass .qrbox .err{width:30mm;font-size:8px;color:#c00;line-height:1.3}
   #pass .qrbox .cap{font-size:8px;color:#555;margin-top:3px}
 
   @media print{
@@ -225,6 +230,10 @@
       <tr><td class="k">Vehicle No:</td><td class="v" id="pVeh"></td></tr>
       <tr><td class="k">Due Date:</td><td class="v" id="pDue"></td></tr>
     </table>
+    <div class="qrbox">
+      <div id="pQr"></div>
+      <div class="cap" id="pCap"></div>
+    </div>
   </div>
 
   <table class="mat">
@@ -249,6 +258,7 @@
 var ENDPOINT = 'https://script.google.com/macros/s/AKfycbxC2PLcTyniQ4u-aivhOQs67t1ReurvDG9J9BQRJKhGMGKatTYEudcwEu_RGt_ueEKjzA/exec';
 
 var PIN='', WHO='', busy=false;
+var LAST_GP='';
 
 function call(b){
   return fetch(ENDPOINT,{method:'POST',body:JSON.stringify(b),redirect:'follow'})
@@ -426,22 +436,42 @@ function render(f,items,payload){
           '<td class="v">'+inr(total)+'</td></tr>';
   document.getElementById('pRows').innerHTML = body;
 
+  LAST_GP=f.gp;
   document.getElementById('pCap').textContent='GP '+f.gp;
   document.getElementById('pass').className='';
 
-  if(typeof QRCode === 'undefined'){
-    say('bad','QR library did not load',
-        'The sheet row WAS saved, but the code cannot be drawn. '+
-        'Check the internet connection and reload before printing.');
+  drawQr(payload);
+}
+
+/**
+ * Render the QR as a data-URI image. An image prints far more reliably
+ * than a canvas, and needs no network once qrcode.js is in the repo.
+ */
+function drawQr(payload){
+  var box = document.getElementById('pQr');
+
+  if(typeof qrcode === 'undefined'){
+    box.innerHTML = '<div class="err">QR LIBRARY NOT LOADED &mdash; '+
+                    'DO NOT USE THIS PASS</div>';
+    say('bad','QR could not be generated',
+        'The sheet row WAS saved, but this pass has no scannable code. '+
+        'Do not print it. Check that qrcode.js is in the repo, reload, '+
+        'and reprint gate pass '+esc(LAST_GP)+'.');
     return;
   }
 
-  QRCode.toCanvas(document.getElementById('pQr'), payload,
-    { errorCorrectionLevel:'M', margin:2, width:118 },
-    function(err){
-      if(err) say('bad','QR could not be drawn',
-                  esc(String(err))+'<br>The sheet row WAS saved.');
-    });
+  try{
+    var qr = qrcode(0, 'M');          // 0 = pick the smallest version that fits
+    qr.addData(payload);
+    qr.make();
+    box.innerHTML = qr.createImgTag(6, 4);
+    say('ok','Gate pass '+esc(LAST_GP)+' ready',
+        'QR encoded \u2014 '+qr.getModuleCount()+' modules. Print it below.');
+  }catch(e){
+    box.innerHTML = '<div class="err">QR FAILED &mdash; DO NOT USE</div>';
+    say('bad','QR could not be generated',
+        esc(String(e))+'<br>The sheet row WAS saved. Do not print this pass.');
+  }
 }
 
 function newPass(){
