@@ -157,8 +157,11 @@
         <div class="lbl">Request No. (automatic)</div>
         <input id="fGp" type="text" readonly tabindex="-1"
                style="background:#0b0f14;color:#9aa4b0;cursor:not-allowed">
-        <button class="grey sm" style="margin-top:6px"
-                onclick="fetchNumber()">Get number</button>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <button class="grey sm" onclick="fetchNumber()">Get number</button>
+          <button class="grey sm" id="btnEditNo"
+                  onclick="askAdmin()">Change number</button>
+        </div>
       </div>
       <div>
         <div class="lbl">Request date</div>
@@ -217,6 +220,22 @@
   <div class="foot">Scanner: <a href="./">sandeeptalla761.github.io/gatepass</a></div>
 </div>
 
+<!-- ---------- ADMIN: CHANGE REQUEST NUMBER ---------- -->
+<div id="admin" class="hide card">
+  <div class="lbl">Admin PIN &mdash; required to change the request number</div>
+  <input id="adminPin" class="pin" type="tel" inputmode="numeric" maxlength="8"
+         autocomplete="off" placeholder="&bull;&bull;&bull;&bull;">
+  <div class="lbl" style="margin-top:14px">New request number</div>
+  <input id="newNo" type="text" inputmode="numeric"
+         placeholder="e.g. 250" style="text-transform:none">
+  <button class="green" onclick="applyAdmin()">Apply</button>
+  <button class="grey" onclick="closeAdmin()">Cancel</button>
+  <div class="foot" style="text-align:left;margin-top:12px">
+    Numbering continues from whatever you set &mdash; enter 250 and the next
+    pass will be 251. A number already used will be refused.
+  </div>
+</div>
+
 <!-- ---------- AFTER SAVE ---------- -->
 <div id="done" class="hide card">
   <div id="saveTag" style="font-size:13px;margin-bottom:8px">&nbsp;</div>
@@ -234,10 +253,10 @@
     <img src="./logo.png" class="logo" alt="TVL"
          onerror="this.style.display='none'">
   </div>
-  <div class="t2" id="pType">OUTWARD - RETURNABLE</div>
-  <div class="t3">TRANS VALVES (INDIA) PVT LTD</div>
+  <div class="t2" id="pType">Outward - Returnable</div>
+  <div class="t3">Trans Valves (INDIA) Pvt Ltd</div>
   <div class="addr">
-    15-B, ROAD NO. 12, S.V.C.I.E, PHASE I, IDA, JEEDIMETLA. HYDERABAD, TELANGANA<br>
+    15-B, Road No. 12, S.V.C.I.E, Phase I, IDA, Jeedimetla. Hyderabad, Telangana<br>
     GSTIN/UIN: 36AAACT8370M1ZU
   </div>
 
@@ -270,10 +289,6 @@
   <div class="sign">
     <div class="who">Requestor<b id="pReq"></b></div>
     <div class="who">Authoriser<b>&nbsp;</b></div>
-    <div class="qrbox">
-      <canvas id="pQr"></canvas>
-      <div class="cap" id="pCap"></div>
-    </div>
   </div>
 </div>
 
@@ -284,6 +299,8 @@ var PIN='', WHO='', busy=false;
 var LAST_GP='';
 var LAST_SAVE=null;
 var NUM_OK=false;
+var MANUAL_NO=false;
+var ADMIN_PIN='';
 
 function call(b){
   return fetch(ENDPOINT,{method:'POST',body:JSON.stringify(b),redirect:'follow'})
@@ -336,7 +353,9 @@ function lock(){
   document.getElementById('pin').value='';
   document.getElementById('form').className='hide';
   document.getElementById('done').className='hide';
+  document.getElementById('admin').className='hide';
   document.getElementById('gate').className='card';
+  MANUAL_NO=false; ADMIN_PIN='';
 }
 
 function setToday(){
@@ -464,7 +483,8 @@ function createPass(){
       'You can print now; the save is still running.');
 
   withTimeout(call({action:'create',pin:PIN,by:WHO,payload:payload,
-                    returnable:true}), 40000)
+                    returnable:true, manualNo:MANUAL_NO,
+                    adminPin:ADMIN_PIN}), 40000)
   .then(function(r){
     busy=false;
     if(!r.ok){
@@ -475,6 +495,7 @@ function createPass(){
       return;
     }
     setSaveState('saved');
+    MANUAL_NO=false; ADMIN_PIN='';
     say('ok','Gate pass '+esc(f.gp)+' recorded',
         r.count+' item row'+(r.count>1?'s':'')+' written from row '+
         r.firstRow+' \u00b7 status '+esc(r.status)+'. Print it below.');
@@ -486,7 +507,8 @@ function createPass(){
         'the pass over.');
   });
 
-  LAST_SAVE = {payload:payload, returnable:true, gp:f.gp};
+  LAST_SAVE = {payload:payload, returnable:true, gp:f.gp,
+               manualNo:MANUAL_NO, adminPin:ADMIN_PIN};
 }
 
 /** Apps Script can hang; never leave the user staring at a spinner. */
@@ -517,7 +539,9 @@ function retrySave(){
   say('busy','Retrying\u2026','');
 
   withTimeout(call({action:'create',pin:PIN,by:WHO,payload:LAST_SAVE.payload,
-                    returnable:LAST_SAVE.returnable}), 40000)
+                    returnable:LAST_SAVE.returnable,
+                    manualNo:LAST_SAVE.manualNo,
+                    adminPin:LAST_SAVE.adminPin}), 40000)
   .then(function(r){
     busy=false;
     if(!r.ok){ setSaveState('failed'); say('bad','Still not saved',esc(r.msg)); return; }
@@ -532,11 +556,11 @@ function retrySave(){
 }
 
 function render(f,items,payload){
-  document.getElementById('pType').textContent = 'OUTWARD - RETURNABLE';
+  document.getElementById('pType').textContent = 'Outward - Returnable';
   document.getElementById('pGp').textContent=f.gp;
   document.getElementById('pDate').textContent=dmy(f.date);
   document.getElementById('pDept').textContent=f.dept;
-  document.getElementById('pStatus').textContent = 'RETURN PENDING';
+  document.getElementById('pStatus').textContent = 'Return Pending';
   document.getElementById('pSup').textContent=f.sup;
   document.getElementById('pVeh').textContent=f.veh;
   document.getElementById('pDue').textContent = dmy(f.due);
@@ -603,6 +627,57 @@ function newPass(){
   fetchNumber();
   setToday();
   say('busy','Ready','Fill the details and add the materials.');
+}
+
+/* ---------- admin: change the request number ---------- */
+
+function askAdmin(){
+  document.getElementById('newNo').value =
+    document.getElementById('fGp').value;
+  document.getElementById('adminPin').value='';
+  document.getElementById('form').className='hide';
+  document.getElementById('admin').className='card';
+  say('busy','Changing the request number',
+      'This needs the admin PIN, not the normal one.');
+}
+
+function closeAdmin(){
+  document.getElementById('admin').className='hide';
+  document.getElementById('form').className='';
+  say('busy','Ready','Fill the details and add the materials.');
+}
+
+function applyAdmin(){
+  var ap  = document.getElementById('adminPin').value.trim();
+  var num = document.getElementById('newNo').value.trim();
+
+  if(!ap){  say('bad','Enter the admin PIN',''); return; }
+  if(!num){ say('bad','Enter the new number',''); return; }
+  if(!/^[0-9]+$/.test(num)){
+    say('bad','Numbers only',
+        'The request number must be digits so the sequence can continue.');
+    return;
+  }
+
+  say('busy','Checking the admin PIN\u2026','');
+
+  withTimeout(call({action:'admin',pin:PIN,adminPin:ap}), 25000)
+  .then(function(r){
+    if(r.authFail){ lock(); say('bad','Session locked',esc(r.msg)); return; }
+    if(!r.ok){ say('bad','Not changed',
+                   esc(r.msg||'Admin PIN is wrong.')); return; }
+
+    ADMIN_PIN = ap;
+    MANUAL_NO = true;
+    NUM_OK = true;
+    document.getElementById('fGp').value = num;
+    closeAdmin();
+    say('ok','Request number set to '+esc(num),
+        'The next pass will be '+(Number(num)+1)+
+        '. If this number is already used the save will be refused.');
+  }).catch(function(e){
+    say('bad','Cannot reach the server',esc(String(e)));
+  });
 }
 
 /* ---------- helpers ---------- */
