@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Create Material Gate Pass — TVL</title>
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script>
+  // If jsDelivr is blocked on the factory network, fall back to unpkg.
+  if (typeof QRCode === "undefined") {
+    document.write('<scr'+'ipt src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"><\/scr'+'ipt>');
+  }
+</script>
 <style>
   :root{
     --bg:#0f1419; --card:#1a2027; --line:#2a333d;
@@ -62,6 +68,8 @@
   /* ============ THE PRINTED PASS ============ */
   #pass{background:#fff;color:#000;padding:16mm 14mm;margin:0 auto;
         width:210mm;min-height:148mm;font:11px/1.4 Arial,Helvetica,sans-serif}
+  #pass .head{display:flex;justify-content:space-between;align-items:flex-start}
+  #pass .logo{height:15mm;width:auto}
   #pass .t1{font-size:15px;font-weight:700;letter-spacing:.5px}
   #pass .t2{font-size:15px;font-weight:700;text-align:center}
   #pass .t3{font-size:14px;font-weight:700;text-align:center}
@@ -78,6 +86,9 @@
   #pass table.mat td.n,#pass table.mat th.n{text-align:center;width:34px}
   #pass table.mat td.q,#pass table.mat th.q{text-align:center;width:44px}
   #pass table.mat td.u,#pass table.mat th.u{text-align:center;width:44px}
+  #pass table.mat td.v,#pass table.mat th.v{text-align:right;width:80px}
+  #pass table.mat tr.tot td{border-top:1.2px solid #000;border-bottom:0;
+                            font-weight:700;padding-top:7px}
   #pass .sign{display:flex;justify-content:space-between;
               align-items:flex-end;margin-top:26px}
   #pass .sign .who{font-size:10px}
@@ -158,10 +169,11 @@
     <div class="lbl">Materials</div>
     <table class="items">
       <thead><tr>
-        <th style="width:34%">Material name</th>
-        <th style="width:30%">Remarks</th>
-        <th style="width:14%">Unit</th>
-        <th style="width:14%">Qty</th>
+        <th style="width:29%">Material name</th>
+        <th style="width:25%">Remarks</th>
+        <th style="width:12%">Unit</th>
+        <th style="width:11%">Qty</th>
+        <th style="width:16%">Value in INR</th>
         <th></th>
       </tr></thead>
       <tbody id="rows"></tbody>
@@ -189,8 +201,12 @@
 
 <!-- ---------- THE PASS ITSELF ---------- -->
 <div id="pass" class="hide">
-  <div class="t1">MATERIAL GATE PASS</div>
-  <div class="t2" style="margin-top:10px" id="pType">Outward - Returnable</div>
+  <div class="head">
+    <div class="t1">MATERIAL GATE PASS</div>
+    <img src="./logo.png" class="logo" alt="TVL"
+         onerror="this.style.display='none'">
+  </div>
+  <div class="t2" style="margin-top:6px" id="pType">Outward - Returnable</div>
   <div class="t3">Trans Valves (INDIA) Pvt Ltd</div>
   <div class="addr">
     15-B, Road No. 12, S.V.C.I.E, Phase I, IDA, Jeedimetla. Hyderabad, Telangana<br>
@@ -214,7 +230,7 @@
   <table class="mat">
     <thead><tr>
       <th class="n">Sl No.</th><th>Material Name</th><th>Remarks</th>
-      <th class="u">Unit</th><th class="q">Qty</th>
+      <th class="u">Unit</th><th class="q">Qty</th><th class="v">Value in INR</th>
     </tr></thead>
     <tbody id="pRows"></tbody>
   </table>
@@ -283,6 +299,7 @@ function addRow(){
     '<td><input class="m-rem" type="text" placeholder="FOR MAKING L TYPE FIXTURE"></td>'+
     '<td><input class="m-uom" type="text" value="Pcs"></td>'+
     '<td><input class="m-qty" type="number" min="1" value="1"></td>'+
+    '<td><input class="m-val" type="number" min="0" step="0.01" value="0"></td>'+
     '<td><button class="del" onclick="delRow(this)">&times;</button></td>';
   tb.appendChild(tr);
 }
@@ -302,7 +319,8 @@ function collect(){
       name:name,
       rem: trs[i].querySelector('.m-rem').value.trim(),
       uom: trs[i].querySelector('.m-uom').value.trim() || 'Pcs',
-      qty: Number(trs[i].querySelector('.m-qty').value) || 1
+      qty: Number(trs[i].querySelector('.m-qty').value) || 1,
+      val: Number(trs[i].querySelector('.m-val').value) || 0
     });
   }
   return out;
@@ -396,17 +414,30 @@ function render(f,items,payload){
   document.getElementById('pDue').textContent = f.type==='R' ? dmy(f.due) : '-';
   document.getElementById('pReq').textContent=f.req;
 
-  document.getElementById('pRows').innerHTML = items.map(function(it,i){
+  var total=0;
+  var body = items.map(function(it,i){
+    total += it.val;
     return '<tr><td class="n">'+(i+1)+'</td><td>'+esc(it.name)+'</td>'+
            '<td>'+esc(it.rem)+'</td><td class="u">'+esc(it.uom)+'</td>'+
-           '<td class="q">'+it.qty+'</td></tr>';
+           '<td class="q">'+it.qty+'</td>'+
+           '<td class="v">'+inr(it.val)+'</td></tr>';
   }).join('');
+  body += '<tr class="tot"><td colspan="5" style="text-align:right">Total</td>'+
+          '<td class="v">'+inr(total)+'</td></tr>';
+  document.getElementById('pRows').innerHTML = body;
 
   document.getElementById('pCap').textContent='GP '+f.gp;
   document.getElementById('pass').className='';
 
+  if(typeof QRCode === 'undefined'){
+    say('bad','QR library did not load',
+        'The sheet row WAS saved, but the code cannot be drawn. '+
+        'Check the internet connection and reload before printing.');
+    return;
+  }
+
   QRCode.toCanvas(document.getElementById('pQr'), payload,
-    { errorCorrectionLevel:'M', margin:2, width:110 },
+    { errorCorrectionLevel:'M', margin:2, width:118 },
     function(err){
       if(err) say('bad','QR could not be drawn',
                   esc(String(err))+'<br>The sheet row WAS saved.');
@@ -432,6 +463,12 @@ function say(kind,title,detail){
   var el=document.getElementById('status');
   el.className='status on '+kind;
   el.innerHTML='<b>'+title+'</b>'+(detail||'');
+}
+
+function inr(n){
+  n = Number(n) || 0;
+  return n.toLocaleString('en-IN',{minimumFractionDigits:2,
+                                   maximumFractionDigits:2}) + ' \u20B9';
 }
 
 function esc(s){
