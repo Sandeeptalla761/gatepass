@@ -152,8 +152,12 @@
     <div class="gpno">GATE PASS <span id="rGp"></span></div>
     <div id="rHdr"></div>
   </div>
+  <div class="card hide" id="rHistCard">
+    <div class="lbl">Already received</div>
+    <div id="rHist"></div>
+  </div>
   <div class="card">
-    <div class="lbl">Tick what has come back</div>
+    <div class="lbl">Tick what has come back now</div>
     <div id="rItems"></div>
     <button class="grey" style="margin-top:14px" onclick="tickAll()">
       Select all outstanding</button>
@@ -392,9 +396,24 @@ function showReceipt(){
       '</div>';
   }).join('');
 
+  var hc=document.getElementById('rHistCard');
+  if(r.history && r.history.length){
+    hc.className='card';
+    document.getElementById('rHist').innerHTML = r.history.map(function(x){
+      return '<div class="row"><div>'+esc(x.item).substring(0,34)+
+             '<br><span style="color:#9aa4b0;font-size:12px">'+esc(x.by)+
+             '</span></div><div style="text-align:right">+'+x.qty+
+             '<br><span style="color:#9aa4b0;font-size:12px">'+esc(x.when)+
+             '</span></div></div>';
+    }).join('');
+  } else {
+    hc.className='card hide';
+  }
+
   show('receipt');
   say('busy','Recording a return',
-      'Tick each item that has come back and check the quantity.');
+      'Part deliveries are fine \u2014 enter only what arrived today. '+
+      'Scan again next time for the rest.');
 }
 
 function syncQty(i){
@@ -437,8 +456,9 @@ function saveReceipt(){
     if(!r.ok){ say('bad','Not saved',esc(r.msg)); return; }
     if(navigator.vibrate) navigator.vibrate([50,60,50]);
     say('ok','Receipt recorded \u2014 GP '+esc(r.gpNo),
-        r.updated+' line'+(r.updated>1?'s':'')+' updated, '+
-        r.complete+' now fully received.');
+        r.updated+' line'+(r.updated>1?'s':'')+' updated \u00b7 '+
+        r.complete+' fully back'+
+        (r.partial ? ' \u00b7 '+r.partial+' still part-pending' : ''));
     setTimeout(backToScan,1800);
   }).catch(function(e){
     busy=false;
