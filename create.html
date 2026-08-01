@@ -35,9 +35,12 @@
   @media(max-width:620px){ .grid{grid-template-columns:1fr} }
 
   input,select,textarea{width:100%;padding:11px;border-radius:9px;
+    text-transform:uppercase;
     border:1px solid var(--line);background:#11161c;color:var(--ink);
     font:15px/1.4 inherit}
-  input.pin{font-size:22px;letter-spacing:8px;text-align:center}
+  input.pin{font-size:22px;letter-spacing:8px;text-align:center;
+            text-transform:none}
+  input[type=number],input[type=date]{text-transform:none}
 
   button{padding:14px;border:0;border-radius:10px;font:600 15px inherit;
          color:#fff;background:var(--blue);cursor:pointer;width:100%;margin-top:10px}
@@ -67,46 +70,64 @@
   .foot{color:var(--dim);font-size:12px;text-align:center;margin-top:14px}
   .foot a{color:var(--blue);text-decoration:none}
 
-  /* ============ THE PRINTED PASS ============ */
-  #pass{background:#fff;color:#000;padding:16mm 14mm;margin:0 auto;
-        width:210mm;min-height:148mm;font:11px/1.4 Arial,Helvetica,sans-serif}
+  /* ============ THE PRINTED PASS — half A4 ============ */
+  #pass{background:#fff;color:#000;margin:0 auto;
+        width:210mm;height:148mm;padding:6mm 9mm;overflow:hidden;
+        font:9px/1.3 Arial,Helvetica,sans-serif}
   #pass .head{display:flex;justify-content:space-between;align-items:flex-start}
-  #pass .logo{height:15mm;width:auto}
-  #pass .t1{font-size:15px;font-weight:700;letter-spacing:.5px}
-  #pass .t2{font-size:15px;font-weight:700;text-align:center}
-  #pass .t3{font-size:14px;font-weight:700;text-align:center}
-  #pass .addr{text-align:center;font-size:10px;margin-top:6px}
-  #pass .meta{display:flex;justify-content:space-between;margin-top:16px;gap:18px;
-              align-items:flex-start}
-  #pass .meta table{border-collapse:collapse;font-size:11px}
-  #pass .meta td{padding:4px 10px 4px 0;border-bottom:1px solid #ddd}
-  #pass .meta td.k{color:#333;white-space:nowrap}
-  #pass .meta td.v{font-weight:600}
-  #pass table.mat{width:100%;border-collapse:collapse;margin-top:18px;font-size:10.5px}
-  #pass table.mat th{text-align:left;border-bottom:1.2px solid #000;
-                     padding:5px 6px;font-size:10px}
-  #pass table.mat td{padding:5px 6px;border-bottom:1px solid #e5e5e5}
-  #pass table.mat td.n,#pass table.mat th.n{text-align:center;width:34px}
-  #pass table.mat td.q,#pass table.mat th.q{text-align:center;width:44px}
-  #pass table.mat td.u,#pass table.mat th.u{text-align:center;width:44px}
-  #pass table.mat td.v,#pass table.mat th.v{text-align:right;width:80px}
-  #pass table.mat tr.tot td{border-top:1.2px solid #000;border-bottom:0;
-                            font-weight:700;padding-top:7px}
-  #pass .sign{display:flex;justify-content:space-between;
-              align-items:flex-end;margin-top:26px}
-  #pass .sign .who{font-size:10px}
-  #pass .sign .who b{display:block;margin-top:22px;font-size:11px}
+  #pass .logo{height:12mm;width:auto}
+  #pass .t1{font-size:12px;font-weight:700;letter-spacing:.6px}
+  #pass .t2{font-size:11px;font-weight:700;text-align:center;margin-top:-6mm}
+  #pass .t3{font-size:11px;font-weight:700;text-align:center}
+  #pass .addr{font-size:7.5px;color:#333;text-align:center;margin-top:1mm}
+
+  #pass .meta{display:flex;justify-content:space-between;margin-top:3mm;
+              gap:8mm;align-items:flex-start}
+  #pass .meta table{border-collapse:collapse;font-size:8.5px}
+  #pass .meta td{padding:1.6mm 4mm 1.6mm 0;border-bottom:1px solid #ddd}
+  #pass .meta td.k{color:#444;white-space:nowrap}
+  #pass .meta td.v{font-weight:700}
+
   #pass .qrbox{text-align:center;flex:0 0 auto}
-  #pass .qrbox img{display:block;width:30mm;height:30mm;
+  #pass .qrbox img{display:block;width:26mm;height:26mm;
                    image-rendering:pixelated;image-rendering:crisp-edges}
-  #pass .qrbox .err{width:30mm;font-size:8px;color:#c00;line-height:1.3}
-  #pass .qrbox .cap{font-size:8px;color:#555;margin-top:3px}
+  #pass .qrbox .cap{font-size:7px;color:#555;margin-top:1mm;font-weight:700}
+  #pass .qrbox .err{width:26mm;font-size:7px;color:#c00;line-height:1.3}
+
+  #pass table.mat{width:100%;border-collapse:collapse;margin-top:3mm;font-size:8.5px}
+  #pass table.mat th{text-align:left;border-bottom:1.1px solid #000;
+                     padding:1.6mm 2mm;font-size:7.5px;letter-spacing:.3px}
+  #pass table.mat td{padding:1.5mm 2mm;border-bottom:1px solid #e8e8e8}
+  #pass table.mat td.n,#pass table.mat th.n{text-align:center;width:8mm}
+  #pass table.mat td.q,#pass table.mat th.q{text-align:center;width:12mm}
+  #pass table.mat td.u,#pass table.mat th.u{text-align:center;width:14mm}
+  #pass table.mat td.v,#pass table.mat th.v{text-align:right;width:22mm}
+  #pass table.mat tr.tot td{border-top:1.1px solid #000;border-bottom:0;
+                            font-weight:700;padding-top:2mm}
+
+  #pass .sign{display:flex;justify-content:space-between;margin-top:8mm;
+              font-size:8px}
+  #pass .sign .who b{display:block;margin-top:8mm;font-size:8.5px;
+                     border-top:1px solid #999;padding-top:1mm;min-width:38mm}
+  #pass .note{margin-top:3mm;font-size:7px;color:#666;text-align:center}
 
   @media print{
-    body{background:#fff;padding:0;max-width:none}
+    /* One sheet of A4, content in the top half. Heights are pinned and
+       overflow hidden so nothing can spill onto a second page. */
+    @page{size:A4 portrait;margin:8mm}
+
+    html,body{background:#fff!important;margin:0!important;padding:0!important;
+              width:auto!important;max-width:none!important;height:auto!important}
     .noprint{display:none!important}
-    #pass{width:auto;padding:10mm}
-    @page{size:A4;margin:8mm}
+
+    #pass{width:auto!important;height:130mm!important;max-height:130mm!important;
+          margin:0!important;padding:0!important;overflow:hidden!important;
+          box-shadow:none!important;
+          page-break-inside:avoid;page-break-after:avoid;break-after:avoid}
+    #pass *{page-break-inside:avoid}
+
+    /* A trailing empty block is the usual cause of a stray page 2. */
+    #pass::after{content:none!important}
   }
 </style>
 </head>
@@ -133,8 +154,11 @@
   <div class="card">
     <div class="grid">
       <div>
-        <div class="lbl">Request No.</div>
-        <input id="fGp" type="text" placeholder="auto">
+        <div class="lbl">Request No. (automatic)</div>
+        <input id="fGp" type="text" readonly tabindex="-1"
+               style="background:#0b0f14;color:#9aa4b0;cursor:not-allowed">
+        <button class="grey sm" style="margin-top:6px"
+                onclick="fetchNumber()">Get number</button>
       </div>
       <div>
         <div class="lbl">Request date</div>
@@ -142,7 +166,10 @@
       </div>
       <div>
         <div class="lbl">Department</div>
-        <input id="fDept" type="text" value="STORES">
+        <select id="fDept">
+          <option value="STORES - SURESH">STORES - SURESH</option>
+          <option value="STORES - RESHMI">STORES - RESHMI</option>
+        </select>
       </div>
       <div>
         <div class="lbl">Due date</div>
@@ -160,13 +187,7 @@
         <div class="lbl">Requestor</div>
         <input id="fReq" type="text" placeholder="e.g. SURESH NAYAK">
       </div>
-      <div>
-        <div class="lbl">Type</div>
-        <select id="fType">
-          <option value="R">Returnable</option>
-          <option value="N">Non-returnable</option>
-        </select>
-      </div>
+
     </div>
   </div>
 
@@ -213,7 +234,7 @@
     <img src="./logo.png" class="logo" alt="TVL"
          onerror="this.style.display='none'">
   </div>
-  <div class="t2" style="margin-top:6px" id="pType">Outward - Returnable</div>
+  <div class="t2" id="pType">Outward - Returnable</div>
   <div class="t3">Trans Valves (INDIA) Pvt Ltd</div>
   <div class="addr">
     15-B, Road No. 12, S.V.C.I.E, Phase I, IDA, Jeedimetla. Hyderabad, Telangana<br>
@@ -262,6 +283,7 @@ var ENDPOINT = 'https://script.google.com/macros/s/AKfycbxC2PLcTyniQ4u-aivhOQs67
 var PIN='', WHO='', busy=false;
 var LAST_GP='';
 var LAST_SAVE=null;
+var NUM_OK=false;
 
 function call(b){
   return fetch(ENDPOINT,{method:'POST',body:JSON.stringify(b),redirect:'follow'})
@@ -275,26 +297,52 @@ function unlock(){
   if(!pin){ say('bad','Enter the PIN',''); return; }
   if(!who){ say('bad','Enter your name',''); return; }
 
-  say('busy','Checking\u2026','');
-  withTimeout(call({action:'nextgp',pin:pin}), 25000).then(function(r){
-    if(!r.ok){ say('bad','Wrong PIN','Ask the stores in-charge.'); return; }
-    PIN=pin; WHO=who;
-    document.getElementById('gate').className='hide';
-    document.getElementById('form').className='';
-    document.getElementById('fGp').value=r.next;
-    document.getElementById('fReq').value=who.toUpperCase();
-    setToday();
-    if(!document.getElementById('rows').children.length){ addRow(); addRow(); }
-    say('busy','Ready','Fill the details and add the materials.');
-  }).catch(function(e){
-    say('bad','Cannot reach the server',esc(String(e)));
+  // Open the form straight away — waiting on Apps Script to cold-start
+  // makes the page feel broken. The request number arrives a moment later.
+  PIN=pin; WHO=who.toUpperCase();
+  document.getElementById('gate').className='hide';
+  document.getElementById('form').className='';
+  document.getElementById('fReq').value=WHO;
+  document.getElementById('fGp').value='';
+  document.getElementById('fGp').placeholder='getting number\u2026';
+  setToday();
+  if(!document.getElementById('rows').children.length){ addRow(); addRow(); }
+  say('busy','Ready','Fill the details and add the materials.');
+
+  fetchNumber();
+}
+
+/** Pull the next request number without blocking the form. */
+function fetchNumber(){
+  var el=document.getElementById('fGp');
+  withTimeout(call({action:'nextgp',pin:PIN}), 25000).then(function(r){
+    if(r.authFail || (!r.ok && /PIN/i.test(r.msg||''))){
+      lock(); say('bad','Wrong PIN','Ask the stores in-charge.'); return;
+    }
+    if(!r.ok){ NUM_OK=false; el.value=''; return; }
+    el.value=r.next;
+    NUM_OK=true;
+  }).catch(function(){
+    NUM_OK=false;
+    el.value='';
+    say('bad','Could not get the request number',
+        'The number is issued by the system and cannot be typed. '+
+        'Check the connection and press <b>Get number</b>.');
   });
+}
+
+function lock(){
+  PIN=''; WHO='';
+  document.getElementById('pin').value='';
+  document.getElementById('form').className='hide';
+  document.getElementById('done').className='hide';
+  document.getElementById('gate').className='card';
 }
 
 function setToday(){
   var d=new Date();
   document.getElementById('fDate').value=iso(d);
-  var due=new Date(d.getTime()+20*86400000);      // 20 days is the usual term
+  var due=new Date(d.getTime()+20*86400000);   // 20 days is the usual term
   document.getElementById('fDue').value=iso(due);
 }
 
@@ -310,7 +358,11 @@ function addRow(){
   tr.innerHTML =
     '<td><input class="m-name" type="text" placeholder="MS 250 X 100 X 20"></td>'+
     '<td><input class="m-rem" type="text" placeholder="FOR MAKING L TYPE FIXTURE"></td>'+
-    '<td><input class="m-uom" type="text" value="Pcs"></td>'+
+    '<td><select class="m-uom">'+
+      '<option value="NO\'S">NO\'S</option>'+
+      '<option value="KGS">KGS</option>'+
+      '<option value="LITRE">LITRE</option>'+
+    '</select></td>'+
     '<td><input class="m-qty" type="number" min="1" value="1"></td>'+
     '<td><input class="m-val" type="number" min="0" step="0.01" value="0"></td>'+
     '<td><button class="del" onclick="delRow(this)">&times;</button></td>';
@@ -329,9 +381,9 @@ function collect(){
     var name=trs[i].querySelector('.m-name').value.trim();
     if(!name) continue;
     out.push({
-      name:name,
-      rem: trs[i].querySelector('.m-rem').value.trim(),
-      uom: trs[i].querySelector('.m-uom').value.trim() || 'Pcs',
+      name:up(name),
+      rem: up(trs[i].querySelector('.m-rem').value),
+      uom: up(trs[i].querySelector('.m-uom').value) || "NO'S",
       qty: Number(trs[i].querySelector('.m-qty').value) || 1,
       val: Number(trs[i].querySelector('.m-val').value) || 0
     });
@@ -341,8 +393,12 @@ function collect(){
 
 /* ---------- payload ---------- */
 function scrub(v){
-  return String(v||'').replace(/[|~^\n\r]/g,' ').replace(/\s+/g,' ').trim();
+  return String(v||'').replace(/[|~^\n\r]/g,' ')
+         .replace(/\s+/g,' ').trim().toUpperCase();
 }
+
+/** Everything on a gate pass is recorded in capitals. */
+function up(v){ return String(v||'').trim().toUpperCase(); }
 
 function ymd(isoStr){
   if(!isoStr) return '';
@@ -361,8 +417,7 @@ function buildPayload(f,items){
           items.map(function(it){
             return scrub(it.name)+'^'+it.qty+'^'+scrub(it.uom).toUpperCase();
           }).join('~'),
-          scrub(f.veh), f.type==='R' ? ymd(f.due) : ''
-         ].join('|');
+          scrub(f.veh), ymd(f.due)].join('|');
 }
 
 /* ---------- save + render ---------- */
@@ -370,20 +425,25 @@ function createPass(){
   if(busy) return;
 
   var f={
-    gp:   document.getElementById('fGp').value.trim(),
+    gp:   up(document.getElementById('fGp').value),
     date: document.getElementById('fDate').value,
-    dept: document.getElementById('fDept').value.trim(),
+    dept: up(document.getElementById('fDept').value),
     due:  document.getElementById('fDue').value,
-    sup:  document.getElementById('fSup').value.trim(),
-    veh:  document.getElementById('fVeh').value.trim(),
-    req:  document.getElementById('fReq').value.trim(),
-    type: document.getElementById('fType').value
+    sup:  up(document.getElementById('fSup').value),
+    veh:  up(document.getElementById('fVeh').value),
+    req:  up(document.getElementById('fReq').value),
+    type: 'R'
   };
 
-  if(!f.gp){   say('bad','Request No. is blank',''); return; }
+  if(!f.gp || !NUM_OK){
+    say('bad','No request number yet',
+        'The number is issued automatically. Press <b>Get number</b> and '+
+        'try again.');
+    return;
+  }
   if(!f.date){ say('bad','Request date is blank',''); return; }
   if(!f.sup){  say('bad','Supplier name is blank',''); return; }
-  if(f.type==='R' && !f.due){ say('bad','Due date is blank',
+  if(!f.due){ say('bad','Due date is blank',
       'Returnable material needs a due date.'); return; }
 
   var items=collect();
@@ -404,7 +464,7 @@ function createPass(){
       'You can print now; the save is still running.');
 
   withTimeout(call({action:'create',pin:PIN,by:WHO,payload:payload,
-                    returnable: f.type==='R'}), 40000)
+                    returnable:true}), 40000)
   .then(function(r){
     busy=false;
     if(!r.ok){
@@ -426,7 +486,7 @@ function createPass(){
         'the pass over.');
   });
 
-  LAST_SAVE = {payload:payload, returnable:f.type==='R', gp:f.gp};
+  LAST_SAVE = {payload:payload, returnable:true, gp:f.gp};
 }
 
 /** Apps Script can hang; never leave the user staring at a spinner. */
@@ -472,16 +532,14 @@ function retrySave(){
 }
 
 function render(f,items,payload){
-  document.getElementById('pType').textContent =
-    f.type==='R' ? 'Outward - Returnable' : 'Outward - Non Returnable';
+  document.getElementById('pType').textContent = 'Outward - Returnable';
   document.getElementById('pGp').textContent=f.gp;
   document.getElementById('pDate').textContent=dmy(f.date);
   document.getElementById('pDept').textContent=f.dept;
-  document.getElementById('pStatus').textContent =
-    f.type==='R' ? 'Return Pending' : 'Non Returnable';
+  document.getElementById('pStatus').textContent = 'Return Pending';
   document.getElementById('pSup').textContent=f.sup;
   document.getElementById('pVeh').textContent=f.veh;
-  document.getElementById('pDue').textContent = f.type==='R' ? dmy(f.due) : '-';
+  document.getElementById('pDue').textContent = dmy(f.due);
   document.getElementById('pReq').textContent=f.req;
 
   var total=0;
@@ -541,9 +599,8 @@ function newPass(){
   document.getElementById('rows').innerHTML='';
   document.getElementById('fSup').value='';
   addRow(); addRow();
-  call({action:'nextgp',pin:PIN}).then(function(r){
-    if(r.ok) document.getElementById('fGp').value=r.next;
-  }).catch(function(){});
+  document.getElementById('fGp').value='';
+  fetchNumber();
   setToday();
   say('busy','Ready','Fill the details and add the materials.');
 }
