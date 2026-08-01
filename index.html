@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>TVL Gate Pass Scanner</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1419; --card:#1a2027; --line:#2a333d;
+    --ink:#e8eaed; --dim:#9aa4b0;
+    --ok:#34a853; --bad:#ea4335; --blue:#4285f4;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{
+    margin:0 auto;padding:12px;max-width:520px;
+    background:var(--bg);color:var(--ink);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  h1{font-size:17px;margin:4px 0 14px}
+  h1 span{color:var(--dim);font-weight:400;font-size:13px;display:block;margin-top:2px}
+
+  .card{background:var(--card);border:1px solid var(--line);
+        border-radius:12px;padding:14px;margin-bottom:12px}
+
+  #reader{width:100%;border-radius:10px;overflow:hidden;background:#000}
+  #reader video{width:100%!important;display:block}
+
+  button{width:100%;padding:15px;border:0;border-radius:10px;
+         font:600 16px inherit;color:#fff;background:var(--blue);
+         margin-top:10px;cursor:pointer}
+  button.stop{background:#5f6368}
+  button:active{opacity:.75}
+
+  input,textarea{width:100%;padding:12px;border-radius:9px;
+    border:1px solid var(--line);background:#11161c;color:var(--ink);
+    font:15px/1.4 inherit}
+  textarea{min-height:74px;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace}
+  input.pin{font-size:24px;letter-spacing:9px;text-align:center}
+
+  .status{padding:13px;border-radius:10px;margin-bottom:12px;
+          display:none;border-left:4px solid}
+  .status.on{display:block}
+  .status.ok{background:rgba(52,168,83,.14);border-color:var(--ok)}
+  .status.bad{background:rgba(234,67,53,.14);border-color:var(--bad)}
+  .status.busy{background:rgba(66,133,244,.14);border-color:var(--blue)}
+  .status b{display:block;font-size:16px;margin-bottom:4px}
+  .status ul{margin:7px 0 0;padding-left:19px;color:var(--dim);font-size:13px}
+
+  .lbl{color:var(--dim);font-size:11px;text-transform:uppercase;
+       letter-spacing:.8px;margin-bottom:8px}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;
+       border-bottom:1px solid var(--line);font-size:13px}
+  .row:last-child{border-bottom:0}
+  .row .gp{font-weight:600}
+  .row .sup{color:var(--dim);font-size:12px;max-width:150px;
+            overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .due{color:var(--dim);font-size:12px;text-align:right;white-space:nowrap}
+  .empty{color:var(--dim);font-size:13px;text-align:center;padding:12px 0}
+  .who{color:var(--dim);font-size:12px;margin-top:10px;text-align:right}
+  .who a{color:var(--blue);text-decoration:none}
+  #app{display:none}
+</style>
+</head>
+<body>
+
+<h1>TVL Gate Pass Scanner
+  <span>Returnable inventory &mdash; outward</span></h1>
+
+<div id="status" class="status"></div>
+
+<div id="gate" class="card">
+  <div class="lbl">Enter PIN</div>
+  <input id="pin" class="pin" type="tel" inputmode="numeric" maxlength="8"
+         autocomplete="off" placeholder="&bull;&bull;&bull;&bull;">
+  <div class="lbl" style="margin-top:14px">Your name</div>
+  <input id="who" type="text" autocomplete="name" placeholder="e.g. Suresh Nayak">
+  <button onclick="unlock()">Unlock</button>
+</div>
+
+<div id="app">
+  <div class="card">
+    <div id="reader"></div>
+    <button id="btn" onclick="toggle()">Start camera</button>
+  </div>
+
+  <div class="card">
+    <div class="lbl">Or type / paste the code</div>
+    <textarea id="manual" placeholder="GP|260731|205|SUPPLIER|ITEM~ITEM|VEHICLE|260820"></textarea>
+    <button onclick="submitManual()">Submit</button>
+  </div>
+
+  <div class="card">
+    <div class="lbl">Recent entries</div>
+    <div id="recent"><div class="empty">Loading&hellip;</div></div>
+  </div>
+
+  <div class="who">Scanning as <b id="whoLabel"></b> &middot;
+    <a href="#" onclick="lock();return false;">change</a></div>
+</div>
+
+<script>
+/* ============================================================
+   SET THIS to your Apps Script web app URL (ending in /exec)
+   ============================================================ */
+var ENDPOINT = 'https://script.google.com/macros/s/AKfycbxC2PLcTyniQ4u-aivhOQs67t1ReurvDG9J9BQRJKhGMGKatTYEudcwEu_RGt_ueEKjzA/exec';
+
+var scanner = null, running = false, busy = false;
+var lastCode = '', lastAt = 0;
+var PIN = '', WHO = '';
+
+/* ---------- talk to Apps Script ----------
+   Content-Type is left as text/plain so the browser sends a
+   "simple" request. Setting application/json would trigger a
+   CORS preflight, which Apps Script cannot answer.            */
+
+function call(body){
+  return fetch(ENDPOINT, {
+    method: 'POST',
+    body: JSON.stringify(body),
+    redirect: 'follow'
+  }).then(function(r){ return r.json(); });
+}
+
+/* ---------- PIN ---------- */
+
+function unlock(){
+  var pin = document.getElementById('pin').value.trim();
+  var who = document.getElementById('who').value.trim();
+  if (!pin){ say('bad','Enter the PIN',''); return; }
+  if (!who){ say('bad','Enter your name','Every entry records who scanned it.'); return; }
+
+  say('busy','Checking\u2026','');
+
+  // A recent-list call doubles as the PIN check.
+  call({ action:'recent', pin:pin }).then(function(r){
+    if (!r.ok || !r.rows){ say('bad','Wrong PIN','Ask the stores in-charge.'); return; }
+    PIN = pin; WHO = who;
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('whoLabel').textContent = who;
+    renderRecent(r.rows);
+    say('busy','Ready','Tap Start camera and point at the gate pass QR.');
+  }).catch(function(e){
+    say('bad','Cannot reach the server', esc(String(e)) +
+        '<br>Check the internet connection and the ENDPOINT setting.');
+  });
+}
+
+function lock(){
+  stop(); PIN=''; WHO='';
+  document.getElementById('pin').value='';
+  document.getElementById('app').style.display='none';
+  document.getElementById('gate').style.display='block';
+  document.getElementById('status').className='status';
+}
+
+/* ---------- camera ---------- */
+
+function toggle(){ running ? stop() : start(); }
+
+function start(){
+  scanner = scanner || new Html5Qrcode('reader');
+  scanner.start(
+    { facingMode:'environment' },
+    { fps:10, qrbox:{ width:250, height:250 } },
+    onScan,
+    function(){}
+  ).then(function(){
+    running = true;
+    var b=document.getElementById('btn');
+    b.textContent='Stop camera'; b.className='stop';
+    say('busy','Camera on','Point at the QR code on the gate pass.');
+  }).catch(function(e){
+    say('bad','Cannot open the camera', esc(String(e)) +
+        '<br>Allow camera access for this site, then try again.');
+  });
+}
+
+function stop(){
+  if (!scanner || !running) return;
+  scanner.stop().then(function(){
+    running=false;
+    var b=document.getElementById('btn');
+    b.textContent='Start camera'; b.className='';
+  }).catch(function(){});
+}
+
+/* ---------- scanning ---------- */
+
+function onScan(text){
+  var now = Date.now();
+  if (text === lastCode && now - lastAt < 4000) return;
+  lastCode = text; lastAt = now;
+  if (navigator.vibrate) navigator.vibrate(60);
+  send(text);
+}
+
+function submitManual(){
+  var el = document.getElementById('manual');
+  var v = el.value.trim();
+  if (!v){ say('bad','Nothing to submit','Enter the code first.'); return; }
+  send(v, function(){ el.value=''; });
+}
+
+function send(payload, onOk){
+  if (busy) return;
+  busy = true;
+  say('busy','Saving\u2026','');
+
+  call({ pin:PIN, by:WHO, payload:payload }).then(function(r){
+    busy = false;
+
+    if (r.authFail){ lock(); say('bad','Session locked', esc(r.msg)); return; }
+
+    if (r.ok){
+      if (navigator.vibrate) navigator.vibrate([50,60,50]);
+      var lis = r.items.map(function(t){ return '<li>'+esc(t)+'</li>'; }).join('');
+      say('ok','Saved \u2014 GP '+esc(r.gpNo),
+          esc(r.supplier) +
+          '<br>Vehicle: '+esc(r.vehicle) +
+          '<br>Due back: <b style="display:inline">'+esc(r.due)+'</b>' +
+          '<br>Row '+r.row+' \u00b7 '+r.itemCount+' items' +
+          '<ul>'+lis+'</ul>');
+      if (onOk) onOk();
+      loadRecent();
+    } else {
+      if (navigator.vibrate) navigator.vibrate([120,80,120]);
+      say('bad','Not saved', esc(r.msg));
+      lastCode = '';
+    }
+  }).catch(function(e){
+    busy = false;
+    say('bad','Connection problem', esc(String(e)) +
+        '<br>The gate pass was NOT saved. Try again.');
+    lastCode = '';
+  });
+}
+
+/* ---------- recent ---------- */
+
+function loadRecent(){
+  call({ action:'recent', pin:PIN })
+    .then(function(r){ renderRecent(r.rows || []); })
+    .catch(function(){});
+}
+
+function renderRecent(rows){
+  var el = document.getElementById('recent');
+  if (!rows.length){ el.innerHTML='<div class="empty">No entries yet</div>'; return; }
+  el.innerHTML = rows.map(function(r){
+    return '<div class="row">' +
+           '<div><div class="gp">GP '+esc(r.gpNo)+'</div>' +
+           '<div class="sup">'+esc(r.supplier)+'</div></div>' +
+           '<div class="due">due '+esc(r.due)+'<br>'+
+           esc(r.by || (r.itemCount+' items'))+'</div></div>';
+  }).join('');
+}
+
+/* ---------- helpers ---------- */
+
+function say(kind,title,detail){
+  var el=document.getElementById('status');
+  el.className='status on '+kind;
+  el.innerHTML='<b>'+title+'</b>'+(detail||'');
+}
+
+function esc(s){
+  return String(s==null?'':s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+document.getElementById('pin').addEventListener('keydown',function(e){
+  if(e.key==='Enter') document.getElementById('who').focus();
+});
+document.getElementById('who').addEventListener('keydown',function(e){
+  if(e.key==='Enter') unlock();
+});
+</script>
+</body>
+</html>
