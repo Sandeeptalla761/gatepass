@@ -74,11 +74,12 @@
   #pass{background:#fff;color:#000;margin:0 auto;
         width:210mm;height:148mm;padding:6mm 9mm;overflow:hidden;
         font:9px/1.3 Arial,Helvetica,sans-serif}
-  #pass .banner{width:78mm;height:auto;display:block}
-  #pass .addr{font-size:7.5px;color:#333;margin-top:1.5mm;
-              padding-bottom:1.5mm;border-bottom:1px solid #1a3a8f}
-  #pass .t1{font-size:12px;font-weight:700;letter-spacing:.6px;margin-top:2.5mm}
-  #pass .t2{font-size:10px;font-weight:700;color:#1a3a8f;letter-spacing:.4px}
+  #pass .head{display:flex;justify-content:space-between;align-items:flex-start}
+  #pass .logo{height:12mm;width:auto}
+  #pass .t1{font-size:12px;font-weight:700;letter-spacing:.6px}
+  #pass .t2{font-size:11px;font-weight:700;text-align:center;margin-top:-6mm}
+  #pass .t3{font-size:11px;font-weight:700;text-align:center}
+  #pass .addr{font-size:7.5px;color:#333;text-align:center;margin-top:1mm}
 
   #pass .meta{display:flex;justify-content:space-between;margin-top:3mm;
               gap:8mm;align-items:flex-start}
@@ -111,10 +112,22 @@
   #pass .note{margin-top:3mm;font-size:7px;color:#666;text-align:center}
 
   @media print{
-    body{background:#fff;padding:0;max-width:none}
+    /* One sheet of A4, content in the top half. Heights are pinned and
+       overflow hidden so nothing can spill onto a second page. */
+    @page{size:A4 portrait;margin:8mm}
+
+    html,body{background:#fff!important;margin:0!important;padding:0!important;
+              width:auto!important;max-width:none!important;height:auto!important}
     .noprint{display:none!important}
-    #pass{width:auto;height:auto;margin:0}
-    @page{size:A5 landscape;margin:5mm}
+
+    #pass{width:auto!important;height:130mm!important;max-height:130mm!important;
+          margin:0!important;padding:0!important;overflow:hidden!important;
+          box-shadow:none!important;
+          page-break-inside:avoid;page-break-after:avoid;break-after:avoid}
+    #pass *{page-break-inside:avoid}
+
+    /* A trailing empty block is the usual cause of a stray page 2. */
+    #pass::after{content:none!important}
   }
 </style>
 </head>
@@ -141,8 +154,11 @@
   <div class="card">
     <div class="grid">
       <div>
-        <div class="lbl">Request No.</div>
-        <input id="fGp" type="text" placeholder="auto">
+        <div class="lbl">Request No. (automatic)</div>
+        <input id="fGp" type="text" readonly tabindex="-1"
+               style="background:#0b0f14;color:#9aa4b0;cursor:not-allowed">
+        <button class="grey sm" style="margin-top:6px"
+                onclick="fetchNumber()">Get number</button>
       </div>
       <div>
         <div class="lbl">Request date</div>
@@ -171,10 +187,7 @@
         <div class="lbl">Requestor</div>
         <input id="fReq" type="text" placeholder="e.g. SURESH NAYAK">
       </div>
-      <div>
-        <div class="lbl">Requested by</div>
-        <input id="fReq2" type="text" placeholder="optional">
-      </div>
+
     </div>
   </div>
 
@@ -216,14 +229,17 @@
 
 <!-- ---------- THE PASS ITSELF ---------- -->
 <div id="pass" class="hide">
-  <img src="./banner.png" class="banner" alt="TRANS VALVES INDIA PVT LTD"
-       onerror="this.style.display='none'">
-  <div class="addr">
-    15-B, ROAD NO. 12, S.V.C.I.E, PHASE I, IDA, JEEDIMETLA, HYDERABAD, TELANGANA
-    &nbsp;&middot;&nbsp; GSTIN/UIN: 36AAACT8370M1ZU
+  <div class="head">
+    <div class="t1">MATERIAL GATE PASS</div>
+    <img src="./logo.png" class="logo" alt="TVL"
+         onerror="this.style.display='none'">
   </div>
-  <div class="t1">MATERIAL GATE PASS</div>
   <div class="t2" id="pType">OUTWARD - RETURNABLE</div>
+  <div class="t3">TRANS VALVES (INDIA) PVT LTD</div>
+  <div class="addr">
+    15-B, ROAD NO. 12, S.V.C.I.E, PHASE I, IDA, JEEDIMETLA. HYDERABAD, TELANGANA<br>
+    GSTIN/UIN: 36AAACT8370M1ZU
+  </div>
 
   <div class="meta">
     <table>
@@ -267,6 +283,7 @@ var ENDPOINT = 'https://script.google.com/macros/s/AKfycbxC2PLcTyniQ4u-aivhOQs67
 var PIN='', WHO='', busy=false;
 var LAST_GP='';
 var LAST_SAVE=null;
+var NUM_OK=false;
 
 function call(b){
   return fetch(ENDPOINT,{method:'POST',body:JSON.stringify(b),redirect:'follow'})
@@ -302,14 +319,15 @@ function fetchNumber(){
     if(r.authFail || (!r.ok && /PIN/i.test(r.msg||''))){
       lock(); say('bad','Wrong PIN','Ask the stores in-charge.'); return;
     }
-    if(!r.ok){ el.placeholder='type a number'; return; }
-    if(!el.value) el.value=r.next;
-    el.placeholder='';
+    if(!r.ok){ NUM_OK=false; el.value=''; return; }
+    el.value=r.next;
+    NUM_OK=true;
   }).catch(function(){
-    el.placeholder='type a number';
-    say('bad','Could not get the next number',
-        'Type the request number by hand, or reload once the connection '+
-        'is back. Everything else still works.');
+    NUM_OK=false;
+    el.value='';
+    say('bad','Could not get the request number',
+        'The number is issued by the system and cannot be typed. '+
+        'Check the connection and press <b>Get number</b>.');
   });
 }
 
@@ -417,7 +435,12 @@ function createPass(){
     type: 'R'
   };
 
-  if(!f.gp){   say('bad','Request No. is blank',''); return; }
+  if(!f.gp || !NUM_OK){
+    say('bad','No request number yet',
+        'The number is issued automatically. Press <b>Get number</b> and '+
+        'try again.');
+    return;
+  }
   if(!f.date){ say('bad','Request date is blank',''); return; }
   if(!f.sup){  say('bad','Supplier name is blank',''); return; }
   if(!f.due){ say('bad','Due date is blank',
