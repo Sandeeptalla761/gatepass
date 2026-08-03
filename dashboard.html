@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gate Pass Dashboard — TVL</title>
+<link rel="manifest" href="./manifest-dash.json">
+<meta name="theme-color" content="#1e3a8a">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="GP Dashboard">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+  :root{
+    --navy:#1e3a8a; --navy-d:#172c69;
+    --bg:#eef2f7; --card:#ffffff; --line:#dbe2ec;
+    --ink:#111827; --dim:#6b7280;
+
+    --pend:#1a237e;  --pend-bg:#e8eaf6;
+    --ndue:#7f6000;  --ndue-bg:#fff2cc;
+    --due:#990000;   --due-bg:#f4cccc;
+    --part:#9a4a00;  --part-bg:#fde8cc;
+    --recd:#1f5c14;  --recd-bg:#d9ead3;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,
+            Helvetica,Arial,sans-serif}
+
+  /* ---------- header ---------- */
+  .top{background:var(--navy);color:#fff;padding:16px 24px;
+       display:flex;justify-content:space-between;align-items:center;gap:16px}
+  .top h1{margin:0;font-size:19px;font-weight:700;letter-spacing:.2px}
+  .top .tag{font-size:10px;letter-spacing:2.6px;opacity:.75;margin-top:3px}
+  .top img{height:44px;background:#fff;border-radius:8px;padding:5px}
+
+  .wrap{max-width:1280px;margin:0 auto;padding:22px 24px 40px}
+
+  .title{display:flex;justify-content:space-between;align-items:flex-end;
+         gap:16px;flex-wrap:wrap;margin-bottom:18px}
+  .title h2{margin:0;font-size:29px;font-weight:800;letter-spacing:-.4px}
+  .title h2 span{color:var(--navy)}
+  .asOf{color:var(--dim);font-size:12px}
+
+  .panel{background:var(--card);border:1px solid var(--line);
+         border-radius:12px;padding:16px 18px;margin-bottom:16px}
+
+  /* ---------- filters ---------- */
+  .filters{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end}
+  .f{display:flex;flex-direction:column;gap:6px}
+  .f label{font-size:10px;letter-spacing:1.1px;color:var(--dim);
+           text-transform:uppercase;font-weight:600}
+  select,input[type=search]{padding:9px 11px;border:1px solid var(--line);
+    border-radius:8px;font:14px inherit;background:#fff;color:var(--ink);
+    min-width:190px}
+  input[type=search]{min-width:250px}
+  .btn{padding:9px 15px;border:1px solid var(--line);border-radius:8px;
+       background:#fff;font:600 13px inherit;cursor:pointer;color:var(--ink)}
+  .btn:hover{background:#f6f8fb}
+  .btn.solid{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .btn.solid:hover{background:var(--navy-d)}
+  .spacer{flex:1}
+
+  /* ---------- stat cards ---------- */
+  .cards{display:grid;gap:14px;margin-bottom:16px;
+         grid-template-columns:repeat(auto-fit,minmax(178px,1fr))}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:12px;
+        padding:15px 17px;cursor:pointer;text-align:left;font:inherit;
+        border-left:5px solid var(--line);transition:box-shadow .12s,transform .12s}
+  .stat:hover{box-shadow:0 4px 14px rgba(20,40,80,.10);transform:translateY(-1px)}
+  .stat:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
+  .stat.on{box-shadow:0 0 0 2px var(--navy) inset}
+  .stat .k{font-size:10px;letter-spacing:1.1px;color:var(--dim);
+           text-transform:uppercase;font-weight:700}
+  .stat .v{font-size:34px;font-weight:800;line-height:1.1;margin:6px 0 2px}
+  .stat .s{font-size:11.5px;color:var(--dim)}
+
+  .stat.pend{border-left-color:var(--pend)} .stat.pend .v{color:var(--pend)}
+  .stat.ndue{border-left-color:#c9a227}     .stat.ndue .v{color:var(--ndue)}
+  .stat.due {border-left-color:var(--due)}  .stat.due  .v{color:var(--due)}
+  .stat.part{border-left-color:var(--part)} .stat.part .v{color:var(--part)}
+  .stat.recd{border-left-color:var(--recd)} .stat.recd .v{color:var(--recd)}
+  .stat.all {border-left-color:var(--navy)} .stat.all  .v{color:var(--navy)}
+
+  /* ---------- table ---------- */
+  .panel h3{margin:0 0 12px;font-size:12px;letter-spacing:1.3px;
+            text-transform:uppercase;color:var(--dim);font-weight:700}
+  .scroll{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-size:10px;letter-spacing:.9px;text-transform:uppercase;
+     color:var(--dim);font-weight:700;padding:8px 10px;
+     border-bottom:2px solid var(--line);white-space:nowrap}
+  td{padding:10px;border-bottom:1px solid #eef1f6;vertical-align:top}
+  tbody tr:hover{background:#f7f9fc}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  td.gp{font-weight:700}
+  .sup{max-width:290px}
+  .late{color:var(--due);font-weight:700;font-size:11.5px}
+
+  .pill{display:inline-block;padding:3px 10px;border-radius:20px;
+        font-size:10.5px;font-weight:800;letter-spacing:.3px;white-space:nowrap}
+  .pill.pend{background:var(--pend-bg);color:var(--pend)}
+  .pill.ndue{background:var(--ndue-bg);color:var(--ndue)}
+  .pill.due {background:var(--due-bg); color:var(--due)}
+  .pill.part{background:var(--part-bg);color:var(--part)}
+  .pill.recd{background:var(--recd-bg);color:var(--recd)}
+
+  .empty{text-align:center;color:var(--dim);padding:30px 0}
+
+  /* ---------- PIN ---------- */
+  .gate{max-width:380px;margin:60px auto}
+  .gate input{width:100%;padding:12px;border:1px solid var(--line);
+              border-radius:9px;font:22px/1 inherit;text-align:center;
+              letter-spacing:9px}
+  .gate .btn{width:100%;margin-top:12px;padding:13px}
+  .msg{padding:11px 13px;border-radius:9px;margin-bottom:14px;display:none;
+       border-left:4px solid;font-size:13.5px}
+  .msg.on{display:block}
+  .msg.bad{background:#fdeceb;border-color:var(--due);color:#7a1310}
+  .msg.busy{background:#eaf0fb;border-color:var(--navy);color:#1c2f63}
+  .hide{display:none}
+
+  @media (prefers-reduced-motion:reduce){
+    .stat{transition:none} .stat:hover{transform:none}
+  }
+  @media print{
+    .top,.filters,.cards,.btn{display:none!important}
+    body{background:#fff} .panel{border:0;padding:0}
+  }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div>
+    <h1>Trans Valves India Private Limited</h1>
+    <div class="tag">WHEN SAFETY MATTERS</div>
+  </div>
+  <img src="./logo.png" alt="TVL" onerror="this.style.display='none'">
+</div>
+
+<div class="wrap">
+  <div id="msg" class="msg"></div>
+
+  <!-- PIN -->
+  <div id="gate" class="panel gate">
+    <div class="f" style="margin-bottom:12px">
+      <label for="pin">Enter PIN</label>
+      <input id="pin" type="password" inputmode="numeric" maxlength="8"
+             autocomplete="off" placeholder="••••">
+    </div>
+    <button class="btn solid" onclick="unlock()">Open dashboard</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="app" class="hide">
+    <div class="title">
+      <h2>Gate Pass <span>Dashboard</span></h2>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="asOf" id="asOf"></span>
+        <button class="btn" onclick="load()">↻ Refresh data</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="filters">
+        <div class="f">
+          <label for="fSup">Supplier</label>
+          <select id="fSup" onchange="draw()"><option value="">All suppliers</option></select>
+        </div>
+        <div class="f">
+          <label for="fDept">Department</label>
+          <select id="fDept" onchange="draw()"><option value="">All departments</option></select>
+        </div>
+        <div class="f">
+          <label for="q">Search</label>
+          <input id="q" type="search" placeholder="Gate pass no. or supplier"
+                 oninput="draw()">
+        </div>
+        <div class="spacer"></div>
+        <button class="btn" onclick="resetAll()">Reset filters</button>
+        <button class="btn" onclick="exportCsv()">Download CSV</button>
+      </div>
+    </div>
+
+    <div class="cards" id="cards"></div>
+
+    <div class="panel">
+      <h3 id="tableTitle">All gate passes</h3>
+      <div class="scroll">
+        <table>
+          <thead><tr>
+            <th>GP No.</th><th>Date</th><th>Supplier</th><th>Department</th>
+            <th>Vehicle</th><th class="num">Items</th><th class="num">Out</th>
+            <th class="num">Back</th><th class="num">Pending</th>
+            <th>Due date</th><th>Status</th>
+          </tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var ENDPOINT = 'https://script.google.com/macros/s/AKfycbxC2PLcTyniQ4u-aivhOQs67t1ReurvDG9J9BQRJKhGMGKatTYEudcwEu_RGt_ueEKjzA/exec';
+
+var PIN='', DATA=null, FILTER='';
+
+var BUCKETS = [
+  { key:'',         cls:'all',  label:'All gate passes',   sub:'total on file' },
+  { key:'pending',  cls:'pend', label:'Pending gate out',  sub:'created, not yet released' },
+  { key:'notDue',   cls:'ndue', label:'Not due for receipt', sub:'out, within due date' },
+  { key:'due',      cls:'due',  label:'Due for receipt',   sub:'past due, not fully back' },
+  { key:'partial',  cls:'part', label:'Partial receipt',   sub:'part back, within due date' },
+  { key:'received', cls:'recd', label:'Received',          sub:'fully returned' }
+];
+
+var PILL = { pending:['pend','PENDING GATE OUT'], notDue:['ndue','NOT DUE FOR RECEIPT'],
+             due:['due','DUE FOR RECEIPT'], partial:['part','PARTIAL RECEIPT'],
+             received:['recd','RECEIVED'] };
+
+function call(b){
+  return fetch(ENDPOINT,{method:'POST',body:JSON.stringify(b),redirect:'follow'})
+    .then(function(r){ return r.json(); });
+}
+
+function unlock(){
+  var p=document.getElementById('pin').value.trim();
+  if(!p){ say('bad','Enter the PIN to continue.'); return; }
+  PIN=p;
+  load(true);
+}
+
+function load(first){
+  say('busy','Loading gate pass data…');
+  call({action:'dash',pin:PIN}).then(function(r){
+    if(!r.ok){
+      say('bad', r.msg || 'PIN is wrong.');
+      if(first) PIN='';
+      return;
+    }
+    DATA=r;
+    document.getElementById('gate').className='panel gate hide';
+    document.getElementById('app').className='';
+    document.getElementById('asOf').textContent='Data as of '+(r.asOf||'');
+    fillFilters();
+    draw();
+    hide();
+  }).catch(function(e){
+    say('bad','Cannot reach the sheet. '+String(e));
+  });
+}
+
+function fillFilters(){
+  var sup={}, dep={};
+  DATA.passes.forEach(function(p){
+    if(p.supplier) sup[p.supplier]=1;
+    if(p.dept) dep[p.dept]=1;
+  });
+  fill('fSup', Object.keys(sup).sort(), 'All suppliers');
+  fill('fDept', Object.keys(dep).sort(), 'All departments');
+}
+
+function fill(id, list, allLabel){
+  var el=document.getElementById(id), cur=el.value;
+  el.innerHTML='<option value="">'+allLabel+'</option>'+
+    list.map(function(v){ return '<option>'+esc(v)+'</option>'; }).join('');
+  if(list.indexOf(cur)>-1) el.value=cur;
+}
+
+function visible(){
+  var sup=document.getElementById('fSup').value;
+  var dep=document.getElementById('fDept').value;
+  var q=document.getElementById('q').value.trim().toUpperCase();
+
+  return DATA.passes.filter(function(p){
+    if(FILTER && p.bucket!==FILTER) return false;
+    if(sup && p.supplier!==sup) return false;
+    if(dep && p.dept!==dep) return false;
+    if(q && (String(p.gpNo).toUpperCase().indexOf(q)<0 &&
+             String(p.supplier).toUpperCase().indexOf(q)<0)) return false;
+    return true;
+  });
+}
+
+/** Counts always reflect the supplier/department/search filters. */
+function countsNow(){
+  var save=FILTER; FILTER='';
+  var rows=visible(); FILTER=save;
+  var c={ '':rows.length, pending:0, notDue:0, due:0, partial:0, received:0 };
+  rows.forEach(function(p){ c[p.bucket]++; });
+  return c;
+}
+
+function draw(){
+  var c=countsNow();
+
+  document.getElementById('cards').innerHTML = BUCKETS.map(function(b){
+    return '<button class="stat '+b.cls+(FILTER===b.key?' on':'')+'" '+
+           'onclick="pick(&quot;'+b.key+'&quot;)">'+
+           '<div class="k">'+b.label+'</div>'+
+           '<div class="v">'+(c[b.key]||0)+'</div>'+
+           '<div class="s">'+b.sub+'</div></button>';
+  }).join('');
+
+  var rows=visible();
+  var t=document.getElementById('tableTitle');
+  var lbl=BUCKETS.filter(function(b){ return b.key===FILTER; })[0];
+  t.textContent=(lbl?lbl.label:'All gate passes')+' — '+rows.length+
+                ' gate pass'+(rows.length===1?'':'es');
+
+  document.getElementById('rows').innerHTML = rows.length ? rows.map(function(p){
+    var pill=PILL[p.bucket];
+    return '<tr>'+
+      '<td class="gp">'+esc(p.gpNo)+'</td>'+
+      '<td>'+esc(p.date)+'</td>'+
+      '<td class="sup">'+esc(p.supplier)+'</td>'+
+      '<td>'+esc(p.dept)+'</td>'+
+      '<td>'+esc(p.vehicle)+'</td>'+
+      '<td class="num">'+p.items+'</td>'+
+      '<td class="num">'+p.outQty+'</td>'+
+      '<td class="num">'+p.inQty+'</td>'+
+      '<td class="num">'+(p.pending||'')+'</td>'+
+      '<td>'+esc(p.due)+
+        (p.daysLate?'<br><span class="late">'+p.daysLate+' days late</span>':'')+
+      '</td>'+
+      '<td><span class="pill '+pill[0]+'">'+pill[1]+'</span></td>'+
+      '</tr>';
+  }).join('') : '<tr><td colspan="11" class="empty">'+
+      'No gate passes match these filters.</td></tr>';
+}
+
+function pick(k){ FILTER = (FILTER===k) ? '' : k; draw(); }
+
+function resetAll(){
+  FILTER='';
+  document.getElementById('fSup').value='';
+  document.getElementById('fDept').value='';
+  document.getElementById('q').value='';
+  draw();
+}
+
+function exportCsv(){
+  var rows=visible();
+  var head=['GP NO','DATE','SUPPLIER','DEPARTMENT','VEHICLE','ITEMS',
+            'OUT QTY','IN QTY','PENDING','DUE DATE','DAYS LATE','STATUS'];
+  var lines=[head.join(',')];
+  rows.forEach(function(p){
+    lines.push([p.gpNo,p.date,p.supplier,p.dept,p.vehicle,p.items,
+                p.outQty,p.inQty,p.pending,p.due,p.daysLate||'',
+                PILL[p.bucket][1]]
+      .map(function(v){ return '"'+String(v==null?'':v).replace(/"/g,'""')+'"'; })
+      .join(','));
+  });
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv'}));
+  a.download='gate-pass-status.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function say(kind,text){
+  var el=document.getElementById('msg');
+  el.className='msg on '+kind;
+  el.textContent=text;
+}
+function hide(){ document.getElementById('msg').className='msg'; }
+
+function esc(s){
+  return String(s==null?'':s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+document.getElementById('pin').addEventListener('keydown',function(e){
+  if(e.key==='Enter') unlock();
+});
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('./sw.js').catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
