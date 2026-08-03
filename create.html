@@ -3,6 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#0f1419">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Gate Pass">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Create Material Gate Pass — TVL</title>
 <!-- QR encoder. Served from this repo so it works even if CDNs are
      blocked; falls back to jsDelivr if the local file is missing. -->
@@ -898,6 +905,15 @@ document.getElementById('pin').addEventListener('keydown',function(e){
 document.getElementById('who').addEventListener('keydown',function(e){
   if(e.key==='Enter') unlock();
 });
+</script>
+
+<script>
+  // Registering the worker is what lets the browser offer "Install app".
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js').catch(function () {});
+    });
+  }
 </script>
 </body>
 </html>
