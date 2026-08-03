@@ -119,6 +119,11 @@
     <div class="lbl">Recent gate passes</div>
     <div id="recent"><div class="empty">Loading&hellip;</div></div>
   </div>
+  <div class="card">
+    <button class="grey" onclick="location.href='./create.html'">
+      Create a new gate pass</button>
+  </div>
+
   <div class="who">Scanning as <b id="whoLabel"></b> &middot;
     <a href="#" onclick="lock();return false;">change</a></div>
 </div>
@@ -163,7 +168,28 @@
   </div>
   <div class="card">
     <button class="green" id="rSave" onclick="saveReceipt()">Record receipt</button>
+    <button class="grey" onclick="openFix()">Correct a wrong entry</button>
     <button class="grey" onclick="backToScan()">Cancel</button>
+  </div>
+</div>
+
+<!-- ============ 5. CORRECT A WRONG RECEIPT ============ -->
+<div id="fix" class="hide">
+  <div class="card">
+    <div class="gpno">GATE PASS <span id="fGpNo"></span></div>
+    <div class="lbl" style="margin-top:8px">Set the correct received total</div>
+    <div class="sub" style="color:var(--dim);font-size:12.5px">
+      Enter what should be on each line, not the amount to remove.
+      A line wrongly showing 6 that should be 2 &mdash; type 2.
+    </div>
+    <div id="fItems" style="margin-top:10px"></div>
+  </div>
+  <div class="card">
+    <div class="lbl">Admin PIN</div>
+    <input id="fixPin" class="pin" type="tel" inputmode="numeric" maxlength="8"
+           autocomplete="off" placeholder="&bull;&bull;&bull;&bull;">
+    <button class="green" id="fSave" onclick="saveFix()">Save correction</button>
+    <button class="grey" onclick="showReceipt()">Back</button>
   </div>
 </div>
 
@@ -190,7 +216,7 @@ function call(body){
 
 /* ---------- screens ---------- */
 function show(id){
-  ['gate','scan','outward','receipt'].forEach(function(s){
+  ['gate','scan','outward','receipt','fix'].forEach(function(s){
     document.getElementById(s).className = (s===id) ? '' : 'hide';
   });
 }
@@ -488,6 +514,86 @@ function saveReceipt(){
     busy=false;
     document.getElementById('rSave').disabled=false;
     say('bad','Connection problem',esc(String(e))+'<br>Nothing was saved.');
+  });
+}
+
+/* ---------- correcting a wrong receipt ---------- */
+
+function openFix(){
+  var r=CURRENT;
+  document.getElementById('fGpNo').textContent=r.gpNo;
+  document.getElementById('fixPin').value='';
+
+  document.getElementById('fItems').innerHTML = r.rows.map(function(it,i){
+    return '<div class="it">'+
+      '<div class="nm">'+(i+1)+'. '+esc(it.name)+'</div>'+
+      '<div class="sub">Out '+it.out+' '+esc(it.uom)+
+        ' &middot; currently recorded back <b>'+it.received+'</b></div>'+
+      '<div class="ctl">'+
+      '<label for="fx'+i+'">Correct total</label>'+
+      '<input type="number" id="fx'+i+'" min="0" max="'+it.out+'" '+
+             'value="'+it.received+'">'+
+      '<span class="sub">'+esc(it.uom)+' of '+it.out+'</span></div>'+
+      '</div>';
+  }).join('');
+
+  show('fix');
+  say('busy','Correcting gate pass '+esc(r.gpNo),
+      'This changes what is on record. The admin PIN is required and the '+
+      'change is kept in the receipt history.');
+}
+
+function saveFix(){
+  if(busy) return;
+
+  var ap=document.getElementById('fixPin').value.trim();
+  if(!ap){
+    say('bad','Admin PIN needed','Corrections have to be authorised.');
+    document.getElementById('fixPin').focus();
+    return;
+  }
+
+  var lines=[], any=false;
+  CURRENT.rows.forEach(function(it,i){
+    var v=Number(document.getElementById('fx'+i).value);
+    if(isNaN(v) || v<0) return;
+    lines.push({row:it.row, qty:Math.min(v, it.out)});
+    if(v!==it.received) any=true;
+  });
+
+  if(!any){
+    say('bad','Nothing changed','Change at least one quantity, or go back.');
+    return;
+  }
+
+  busy=true;
+  document.getElementById('fSave').disabled=true;
+  say('busy','Saving correction\u2026','');
+
+  call({action:'fixrec',pin:PIN,by:WHO,adminPin:ap,
+        gpNo:CURRENT.gpNo,lines:lines})
+  .then(function(r){
+    busy=false;
+    document.getElementById('fSave').disabled=false;
+    if(r.authFail){ lock(); say('bad','Session locked',esc(r.msg)); return; }
+    if(r.adminFail){
+      if(navigator.vibrate) navigator.vibrate([120,80,120]);
+      document.getElementById('fixPin').value='';
+      document.getElementById('fixPin').focus();
+      say('bad','Not corrected',esc(r.msg));
+      return;
+    }
+    if(!r.ok){ say('bad','Not corrected',esc(r.msg)); return; }
+
+    if(navigator.vibrate) navigator.vibrate([50,60,50]);
+    say('ok','Corrected \u2014 GP '+esc(r.gpNo),
+        r.changed+' line'+(r.changed>1?'s':'')+' changed \u00b7 '+
+        esc(r.notes)+'<br>The change is recorded in the receipt history.');
+    setTimeout(backToScan,2400);
+  }).catch(function(e){
+    busy=false;
+    document.getElementById('fSave').disabled=false;
+    say('bad','Connection problem',esc(String(e))+'<br>Nothing was changed.');
   });
 }
 
