@@ -46,6 +46,7 @@
          color:#fff;background:var(--blue);cursor:pointer;width:100%;margin-top:10px}
   button.grey{background:#5f6368}
   button.green{background:var(--ok)}
+  button.amber{background:#b06000}
   button.sm{width:auto;padding:8px 14px;font-size:13px;margin:0}
   button:active{opacity:.75}
   button:disabled{opacity:.4}
@@ -219,12 +220,14 @@
   </div>
 
   <div class="card">
-    <div class="lbl">Reprint an earlier gate pass</div>
+    <div class="lbl">Earlier gate pass</div>
     <div style="display:flex;gap:8px">
       <input id="oldNo" type="text" inputmode="numeric"
              placeholder="Request No." style="text-transform:none">
       <button class="grey sm" style="white-space:nowrap"
               onclick="reprint()">Find &amp; print</button>
+      <button class="grey sm" style="white-space:nowrap"
+              onclick="findEdit()">Find &amp; edit</button>
     </div>
   </div>
 
@@ -311,6 +314,7 @@ var LAST_GP='';
 var LAST_SAVE=null;
 var NUM_OK=false;
 var MANUAL_NO=false;
+var EDIT_GP='';
 var ADMIN_PIN='';
 
 function call(b){
@@ -480,6 +484,8 @@ function createPass(){
   if(!items.length){ say('bad','No materials','Add at least one material.'); return; }
 
   var payload=buildPayload(f,items);
+
+  if(EDIT_GP){ askEditPin(f,items,payload); return; }
 
   // Build and show the pass FIRST. It is drawn entirely in this browser,
   // so it must never wait on the sheet — a slow or failed save should not
@@ -686,11 +692,135 @@ function reprint(){
   });
 }
 
+/**
+ * Load an existing pass into the form for amendment. Only possible while
+ * it is still PENDING GATE OUT — once material has left, the printed copy
+ * is with the supplier and the record must not move under it.
+ */
+function findEdit(){
+  if(busy) return;
+  var no=document.getElementById('oldNo').value.trim();
+  if(!no){ say('bad','Enter a request number',''); return; }
+
+  busy=true;
+  say('busy','Opening gate pass '+esc(no)+'\u2026','');
+
+  withTimeout(call({action:'getpass',pin:PIN,by:WHO,gpNo:no}), 30000)
+  .then(function(r){
+    busy=false;
+    if(r.authFail){ lock(); say('bad','Session locked',esc(r.msg)); return; }
+    if(!r.ok){ say('bad','Not found',esc(r.msg)); return; }
+
+    if(String(r.status).indexOf('PENDING')!==0){
+      say('bad','Cannot be edited',
+          'Gate pass '+esc(r.gpNo)+' has already gone out ('+esc(r.status)+
+          ').<br>Use <b>Find &amp; print</b> for a copy, or raise a new pass.');
+      return;
+    }
+
+    document.getElementById('fGp').value  = r.gpNo;
+    document.getElementById('fDate').value= fromYmd(r.date);
+    document.getElementById('fDue').value = fromYmd(r.due);
+    document.getElementById('fSup').value = r.supplier;
+    document.getElementById('fVeh').value = r.vehicle;
+    document.getElementById('fReq').value = r.requestor;
+    if(r.dept) document.getElementById('fDept').value = r.dept;
+
+    document.getElementById('rows').innerHTML='';
+    r.items.forEach(function(it){
+      addRow();
+      var trs=document.getElementById('rows').querySelectorAll('tr');
+      var tr=trs[trs.length-1];
+      tr.querySelector('.m-name').value = it.name;
+      tr.querySelector('.m-rem').value  = it.rem;
+      tr.querySelector('.m-qty').value  = it.qty;
+      tr.querySelector('.m-val').value  = it.val;
+      var u=tr.querySelector('.m-uom');
+      for(var k=0;k<u.options.length;k++){
+        if(u.options[k].value===it.uom){ u.selectedIndex=k; break; }
+      }
+    });
+
+    EDIT_GP = r.gpNo;
+    NUM_OK  = true;
+    document.getElementById('btnSave').textContent =
+      'Save changes to GP '+r.gpNo+' & reprint';
+    document.getElementById('btnSave').className='amber';
+    document.getElementById('btnEditNo').className='grey sm hide';
+
+    say('ok','Editing gate pass '+esc(r.gpNo),
+        'Change what you need, then save. The admin PIN will be asked for. '+
+        '<a href="#" onclick="cancelEdit();return false;" '+
+        'style="color:#4285f4">Cancel editing</a>');
+  }).catch(function(e){
+    busy=false;
+    say('bad','Could not reach the sheet',esc(String(e)));
+  });
+}
+
+function cancelEdit(){
+  EDIT_GP='';
+  document.getElementById('btnSave').textContent='Save to sheet & generate pass';
+  document.getElementById('btnSave').className='green';
+  document.getElementById('btnEditNo').className='grey sm';
+  newPass();
+}
+
 /** "260801" -> "2026-08-01" for the date helpers. */
 function fromYmd(v){
   v=String(v||'').trim();
   if(!/^[0-9]{6}$/.test(v)) return '';
   return '20'+v.substring(0,2)+'-'+v.substring(2,4)+'-'+v.substring(4,6);
+}
+
+/* ---------- saving an amendment ---------- */
+
+function askEditPin(f,items,payload){
+  var ap = prompt('Admin PIN to save changes to gate pass '+EDIT_GP+':');
+  if(ap===null) return;
+  ap=String(ap).trim();
+  if(!ap){ say('bad','No admin PIN entered',''); return; }
+
+  var extras = items.map(function(it){ return {rem:it.rem, val:it.val}; });
+
+  render(f,items,payload);
+  document.getElementById('form').className='hide';
+  document.getElementById('done').className='card';
+  setSaveState('saving');
+
+  busy=true;
+  say('busy','Saving changes to GP '+esc(EDIT_GP)+'\u2026',
+      'You can print now; the save is still running.');
+
+  withTimeout(call({action:'update',pin:PIN,by:WHO,adminPin:ap,
+                    gpNo:EDIT_GP, payload:payload, extras:extras,
+                    dept:f.dept, requestor:f.req}), 40000)
+  .then(function(r){
+    busy=false;
+    if(!r.ok){
+      setSaveState('failed');
+      say('bad','Printed pass is fine, but the sheet was NOT changed',
+          esc(r.msg));
+      return;
+    }
+    setSaveState('saved');
+    var was=EDIT_GP; EDIT_GP='';
+    document.getElementById('btnSave').textContent=
+      'Save to sheet & generate pass';
+    document.getElementById('btnSave').className='green';
+    document.getElementById('btnEditNo').className='grey sm';
+    say('ok','Gate pass '+esc(was)+' amended',
+        r.count+' item row'+(r.count>1?'s':'')+' now on file. '+
+        'The old QR is no longer valid \u2014 print this copy and '+
+        'destroy the previous one.');
+  }).catch(function(e){
+    busy=false;
+    setSaveState('failed');
+    say('bad','Printed pass is fine, but the sheet was NOT changed',
+        esc(String(e)));
+  });
+
+  LAST_SAVE=null;
 }
 
 /* ---------- admin: change the request number ---------- */
