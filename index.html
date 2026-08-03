@@ -127,6 +127,12 @@
     <div id="oItems"></div>
   </div>
   <div class="card">
+    <div class="lbl">Gate PIN &mdash; required to release material</div>
+    <input id="gatePin" class="pin" type="tel" inputmode="numeric"
+           maxlength="8" autocomplete="off"
+           placeholder="&bull;&bull;&bull;&bull;">
+  </div>
+  <div class="card">
     <button class="green" id="oSave" onclick="saveGateOut()">Record gate out</button>
     <button class="grey" onclick="backToScan()">Cancel</button>
   </div>
@@ -184,6 +190,7 @@ function show(id){
 
 function backToScan(){
   CURRENT=null; PAYLOAD=''; lastCode='';
+  var g=document.getElementById('gatePin'); if(g) g.value='';
   document.getElementById('manual').value='';
   show('scan');
   say('busy','Ready','Tap Start camera and point at a gate pass QR.');
@@ -319,8 +326,10 @@ function showGateOut(){
   document.getElementById('oSave').textContent =
     'Record gate out \u2014 '+r.rows.length+' item'+(r.rows.length>1?'s':'');
   show('outward');
+  document.getElementById('gatePin').value='';
   say('busy','Material going out',
-      'Check each quantity against what is physically leaving, then record it.');
+      'Check each quantity against what is physically leaving, enter the '+
+      'gate PIN, then record it.');
 }
 
 function syncOut(i){
@@ -330,6 +339,14 @@ function syncOut(i){
 
 function saveGateOut(){
   if(busy) return;
+
+  var gp=document.getElementById('gatePin').value.trim();
+  if(!gp){
+    say('bad','Gate PIN needed',
+        'Releasing material has to be authorised. Enter the gate PIN.');
+    document.getElementById('gatePin').focus();
+    return;
+  }
 
   var lines=[];
   CURRENT.rows.forEach(function(it,i){
@@ -346,11 +363,19 @@ function saveGateOut(){
   document.getElementById('oSave').disabled=true;
   say('busy','Recording\u2026','');
 
-  call({action:'gateout',pin:PIN,by:WHO,gpNo:CURRENT.gpNo,lines:lines})
+  call({action:'gateout',pin:PIN,by:WHO,gpNo:CURRENT.gpNo,
+        lines:lines,gatePin:gp})
   .then(function(r){
     busy=false;
     document.getElementById('oSave').disabled=false;
     if(r.authFail){ lock(); say('bad','Session locked',esc(r.msg)); return; }
+    if(r.gateFail){
+      if(navigator.vibrate) navigator.vibrate([120,80,120]);
+      document.getElementById('gatePin').value='';
+      document.getElementById('gatePin').focus();
+      say('bad','Not released',esc(r.msg));
+      return;
+    }
     if(!r.ok){ say('bad','Not recorded',esc(r.msg)); return; }
     if(navigator.vibrate) navigator.vibrate([50,60,50]);
     say('ok','Gate out recorded \u2014 GP '+esc(r.gpNo),
