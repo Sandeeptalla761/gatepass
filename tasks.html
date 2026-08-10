@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>My Tasks</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+       background:#eef1f4;color:#111;padding-bottom:110px}
+  header{background:#075E54;color:#fff;padding:16px 18px;position:sticky;top:0;z-index:5}
+  header h1{margin:0;font-size:18px;font-weight:600}
+  header p{margin:5px 0 0;font-size:13px;opacity:.9}
+  .wrap{padding:12px}
+  .row{display:flex;gap:13px;align-items:flex-start;background:#fff;border-radius:12px;
+       padding:15px 14px;margin-bottom:9px;box-shadow:0 1px 3px rgba(0,0,0,.09);cursor:pointer}
+  .row input{width:23px;height:23px;margin:1px 0 0;flex:none;accent-color:#25D366}
+  .row b{display:block;font-size:15px;font-weight:600;line-height:1.35;word-break:break-word}
+  .row small{display:block;color:#667;font-size:12px;margin-top:4px}
+  .done{opacity:.45}
+  .done b{text-decoration:line-through}
+  .bar{position:fixed;bottom:0;left:0;right:0;padding:12px 14px 18px;background:#fff;
+       box-shadow:0 -2px 10px rgba(0,0,0,.13)}
+  button{width:100%;padding:16px;font-size:16px;font-weight:600;color:#fff;background:#25D366;
+         border:0;border-radius:12px}
+  button:disabled{background:#a8dfbe}
+  .tools{display:flex;gap:10px;margin-bottom:10px}
+  .tools a{flex:1;text-align:center;padding:9px;font-size:13px;color:#075E54;background:#fff;
+           border-radius:9px;text-decoration:none;box-shadow:0 1px 3px rgba(0,0,0,.09)}
+  #state{padding:40px 24px;text-align:center;font-size:16px;line-height:1.6;color:#445}
+  #state h2{color:#111;margin:0 0 8px}
+</style>
+</head>
+<body>
+
+<div id="state">Loading your tasks…</div>
+<div id="app" style="display:none">
+  <header><h1 id="ttl">My Tasks</h1><p id="sub"></p></header>
+  <div class="wrap">
+    <div class="tools">
+      <a href="#" id="selall">Select all pending</a>
+      <a href="#" id="clr">Clear</a>
+    </div>
+    <div id="list"></div>
+  </div>
+  <div class="bar"><button id="go">Submit</button></div>
+</div>
+
+<script>
+// Apps Script /exec of the Ultimate Checklist project (LIVE Meta webhook deployment)
+var API = 'https://script.google.com/macros/s/AKfycby2craSCST7UWkSTce4PXe2n6lrYJIMhyGjugl5a_klh1FfwFdZMlcucUyOWcwXgXWF/exec';
+
+var token = (location.search.match(/[?&]t=([^&]+)/) || [])[1] || '';
+var seq = 0;
+
+// JSONP - no CORS setup needed, same trick the gate pass pages use
+function call(params, done, fail) {
+  var cb = 'cb' + (++seq) + '_' + Date.now();
+  var timer = setTimeout(function () { cleanup(); fail && fail('timeout'); }, 20000);
+  function cleanup() {
+    clearTimeout(timer);
+    try { delete window[cb]; } catch (e) { window[cb] = undefined; }
+    if (s.parentNode) s.parentNode.removeChild(s);
+  }
+  window[cb] = function (r) { cleanup(); done(r); };
+  var q = ['callback=' + cb];
+  for (var k in params) q.push(k + '=' + encodeURIComponent(params[k]));
+  var s = document.createElement('script');
+  s.src = API + '?' + q.join('&');
+  s.onerror = function () { cleanup(); fail && fail('network'); };
+  document.body.appendChild(s);
+}
+
+function msg(html) {
+  document.getElementById('app').style.display = 'none';
+  var st = document.getElementById('state');
+  st.style.display = 'block';
+  st.innerHTML = html;
+}
+
+function render(d) {
+  document.getElementById('state').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('ttl').textContent = 'Tasks - ' + d.date;
+
+  var pending = d.items.filter(function (i) { return !i.done; });
+  document.getElementById('sub').textContent =
+    d.doer + ' \u00b7 ' + pending.length + ' of ' + d.items.length + ' pending';
+
+  var html = '';
+  d.items.slice().sort(function (a, b) {
+    return (a.done === b.done) ? 0 : (a.done ? 1 : -1);
+  }).forEach(function (i) {
+    html += '<label class="row' + (i.done ? ' done' : '') + '">' +
+            '<input type="checkbox" value="' + i.key + '"' +
+            (i.done ? ' checked disabled' : '') + '>' +
+            '<span><b>' + esc(i.task) + '</b><small>' +
+            (i.done ? 'Completed' : 'Due ' + esc(i.due) +
+              (i.late > 0 ? ' \u00b7 ' + i.late + 'd late' : '')) +
+            '</small></span></label>';
+  });
+  document.getElementById('list').innerHTML = html;
+
+  var btn = document.getElementById('go');
+  btn.disabled = false;
+  btn.textContent = 'Submit';
+  if (!pending.length) msg('<h2>All done</h2><p>Every task for ' + d.date +
+                           ' is completed. You can close this page.</p>');
+}
+
+function esc(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+document.getElementById('selall').onclick = function (e) {
+  e.preventDefault();
+  boxes().forEach(function (c) { c.checked = true; });
+};
+document.getElementById('clr').onclick = function (e) {
+  e.preventDefault();
+  boxes().forEach(function (c) { c.checked = false; });
+};
+function boxes() {
+  return [].slice.call(document.querySelectorAll('input[type=checkbox]:not([disabled])'));
+}
+
+document.getElementById('go').onclick = function () {
+  var ids = boxes().filter(function (c) { return c.checked; })
+                   .map(function (c) { return c.value; });
+  if (!ids.length) { alert('Tick at least one task first.'); return; }
+
+  var btn = this;
+  btn.disabled = true;
+  btn.textContent = 'Saving\u2026';
+
+  call({ api: 'submit', t: token, ids: ids.join(',') }, function (r) {
+    if (!r.ok) {
+      btn.disabled = false; btn.textContent = 'Submit';
+      alert(r.error === 'expired'
+        ? 'This link has expired. Please open the newest WhatsApp message.'
+        : 'Could not save: ' + r.error);
+      return;
+    }
+    msg('<h2>Saved</h2><p>Marked <b>' + r.marked + '</b> task(s) completed.' +
+        (r.left ? '<br>' + r.left + ' still pending.' : '<br>Everything is done.') +
+        '</p><p>A confirmation has been sent on WhatsApp.<br>You can close this page.</p>');
+  }, function (err) {
+    btn.disabled = false; btn.textContent = 'Submit';
+    alert('Network problem (' + err + '). Please try again.');
+  });
+};
+
+if (!token) {
+  msg('<h2>Link not valid</h2><p>Please open the link from your WhatsApp message.</p>');
+} else {
+  call({ api: 'tasks', t: token }, function (r) {
+    if (!r.ok) {
+      msg(r.error === 'expired'
+        ? '<h2>Link expired</h2><p>Links last 6 hours. Please open the newest WhatsApp message.</p>'
+        : '<h2>Problem</h2><p>' + esc(r.error) + '</p>');
+      return;
+    }
+    render(r);
+  }, function (err) {
+    msg('<h2>Could not load</h2><p>Network problem (' + err + '). Please try again.</p>');
+  });
+}
+</script>
+</body>
+</html>
