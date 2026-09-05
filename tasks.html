@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e2f6b">
+<title>My Tasks — Trans Valves India</title>
+
+<!--
+  TVL TASK SYSTEM — FILE 4b : tasks.html
+  =====================================================================
+  Publish this to GitHub Pages, in the same repo as your gate pass app.
+
+    1. Set API_URL below to your Apps Script /exec URL.
+    2. Commit as tasks.html
+    3. Put the published URL in PAGE_URL on the Config tab.
+
+  It talks to Apps Script over JSONP, so there is no CORS setup and it
+  works from an anonymous phone browser. Apps Script never serves HTML,
+  which is what used to fail on mobile.
+-->
+
+<style>
+  :root{
+    --navy:#1e2f6b; --blue:#2563eb;
+    --green:#16a34a; --green-bg:#dcfce7; --green-tx:#166534;
+    --amber:#f59e0b; --amber-bg:#fef3c7; --amber-tx:#92400e;
+    --red:#dc2626;   --red-bg:#fee2e2;   --red-tx:#b91c1c;
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --bg:#eef1f8; --card:#fff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.45;
+    padding-bottom:104px;
+  }
+
+  header{
+    background:var(--navy); color:#fff; padding:14px 16px;
+    position:sticky; top:0; z-index:20;
+  }
+  .hrow{display:flex;align-items:center;gap:12px;}
+  .hrow .txt{flex:1;min-width:0;}
+  .logo{
+    background:#fff;border-radius:10px;padding:6px;flex:0 0 auto;
+    width:52px;height:52px;display:none;align-items:center;justify-content:center;
+  }
+  .logo.on{display:flex;}
+  .logo img{max-width:100%;max-height:100%;display:block;}
+  header .co{font-size:15px;font-weight:700;letter-spacing:.2px;}
+  header .tag{font-size:10px;letter-spacing:2.5px;color:#b9c4f0;margin-top:2px;}
+  header .who{margin-top:10px;font-size:13px;color:#dbe2ff;}
+  header .who b{color:#fff;}
+
+  .wrap{max-width:640px;margin:0 auto;padding:14px;}
+
+  .summary{
+    display:flex;gap:8px;margin-bottom:14px;
+  }
+  .stat{
+    flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:10px 8px;text-align:center;
+  }
+  .stat .v{font-size:20px;font-weight:800;color:var(--navy);}
+  .stat .k{font-size:10px;letter-spacing:.6px;color:var(--muted);font-weight:700;margin-top:2px;}
+  .stat.od .v{color:var(--red);}
+  .stat.dn .v{color:var(--green);}
+
+  .task{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;
+    margin-bottom:12px;overflow:hidden;transition:border-color .15s;
+  }
+  .task.sel-done{border-color:var(--green);}
+  .task.sel-rev{border-color:var(--amber);}
+  .task.sel-no{border-color:var(--red);}
+
+  .task .top{padding:13px 14px 11px;}
+  .task .name{font-size:15px;font-weight:600;line-height:1.35;}
+  .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;}
+  .chip{
+    font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;
+    background:#eef1f8;color:#42506e;letter-spacing:.2px;
+  }
+  .chip.due{background:#e8effe;color:#1d4ed8;}
+  .chip.od{background:var(--red-bg);color:var(--red-tx);}
+  .chip.rev{background:var(--amber-bg);color:var(--amber-tx);}
+  .chip.type{background:#f1f3f9;color:#4b5563;}
+
+  .actions{display:flex;border-top:1px solid var(--line);}
+  .actions button{
+    flex:1;border:0;background:var(--card);padding:13px 6px;
+    font:inherit;font-size:13px;font-weight:700;color:var(--muted);
+    cursor:pointer;border-right:1px solid var(--line);
+  }
+  .actions button:last-child{border-right:0;}
+  .actions button.on.done{background:var(--green-bg);color:var(--green-tx);}
+  .actions button.on.rev {background:var(--amber-bg);color:var(--amber-tx);}
+  .actions button.on.no  {background:var(--red-bg);color:var(--red-tx);}
+
+  .revbox{display:none;padding:12px 14px 14px;background:#fffdf5;border-top:1px dashed var(--amber);}
+  .revbox.open{display:block;}
+  .revbox label{display:block;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--amber-tx);margin:0 0 5px;}
+  .revbox select,.revbox input,.revbox textarea{
+    width:100%;font:inherit;font-size:14px;padding:10px 11px;
+    border:1px solid #e3d5ac;border-radius:9px;background:#fff;margin-bottom:11px;
+  }
+  .revbox textarea{resize:vertical;min-height:52px;}
+  .revbox .err{color:var(--red-tx);font-size:12px;font-weight:600;margin:-6px 0 8px;display:none;}
+  .revbox .err.show{display:block;}
+
+  .bar{
+    position:fixed;left:0;right:0;bottom:0;background:#fff;
+    border-top:1px solid var(--line);padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+    box-shadow:0 -3px 14px rgba(20,30,70,.08);z-index:30;
+  }
+  .bar .count{font-size:12px;color:var(--muted);text-align:center;margin-bottom:9px;}
+  .bar button{
+    width:100%;border:0;border-radius:12px;padding:15px;
+    font:inherit;font-size:16px;font-weight:700;color:#fff;background:var(--navy);
+    cursor:pointer;
+  }
+  .bar button:disabled{background:#c3c9d6;}
+
+  .state{text-align:center;padding:56px 24px;color:var(--muted);}
+  .state .big{font-size:46px;margin-bottom:10px;}
+  .state h2{color:var(--ink);font-size:18px;margin:0 0 8px;}
+  .state p{margin:0;font-size:14px;}
+
+  .toast{
+    position:fixed;left:14px;right:14px;bottom:96px;z-index:40;
+    background:#111827;color:#fff;border-radius:11px;padding:13px 15px;
+    font-size:14px;opacity:0;transform:translateY(10px);
+    transition:opacity .2s,transform .2s;pointer-events:none;
+  }
+  .toast.show{opacity:1;transform:translateY(0);}
+  .toast.good{background:var(--green-tx);}
+  .toast.bad{background:var(--red-tx);}
+
+  .spin{
+    width:32px;height:32px;border:3px solid var(--line);border-top-color:var(--navy);
+    border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 14px;
+  }
+  @keyframes sp{to{transform:rotate(360deg);}}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="hrow">
+    <div class="logo" id="logoBox"><img id="logoImg" alt="TVL"></div>
+    <div class="txt">
+      <div class="co">Trans Valves India Private Limited</div>
+      <div class="tag">WHEN SAFETY MATTERS</div>
+    </div>
+  </div>
+  <div class="who" id="who">Loading your tasks…</div>
+</header>
+
+<div class="wrap" id="wrap">
+  <div class="state"><div class="spin"></div><p>Loading your tasks…</p></div>
+</div>
+
+<div class="bar" id="bar" style="display:none">
+  <div class="count" id="count">Nothing selected yet</div>
+  <button id="submit" disabled>Submit</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===== SET THIS to your Apps Script /exec URL ===== */
+var API_URL = 'https://script.google.com/macros/s/AKfycbx9R5YC8AZfpvV4c1Lmk8Eq8al41zj5mbmlxI11NixcxJQNTpwTNdya61C8noPM_HGy/exec';
+
+/* Logo file sitting beside this page in the same repo folder.
+   Change the name to match yours. If the file is missing the header
+   simply renders without it, so a wrong name breaks nothing. */
+var LOGO_FILE = 'logo.png';
+
+var token   = new URLSearchParams(location.search).get('t') || '';
+var STATE   = {};          // key -> {mode:'done'|'rev'|'no', reason:'', note:'', date:''}
+var DATA    = null;
+var seq     = 0;
+
+/* ---------- JSONP, because Apps Script sends no CORS headers ---------- */
+function api(params, cb, onErr){
+  var name = 'tvlcb' + (++seq) + '_' + Date.now();
+  var timer = setTimeout(function(){ cleanup(); onErr && onErr('timeout'); }, 25000);
+
+  window[name] = function(res){ clearTimeout(timer); cleanup(); cb(res); };
+
+  function cleanup(){
+    try{ delete window[name]; }catch(e){ window[name] = undefined; }
+    if (s && s.parentNode) s.parentNode.removeChild(s);
+  }
+
+  var q = Object.keys(params).map(function(k){
+    return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+  }).join('&');
+
+  var s = document.createElement('script');
+  s.src = API_URL + '?' + q + '&callback=' + name;
+  s.onerror = function(){ clearTimeout(timer); cleanup(); onErr && onErr('network'); };
+  document.body.appendChild(s);
+}
+
+/* ---------- load ---------- */
+function load(){
+  if (!token){ fail('No link token', 'Open the link from your WhatsApp message.'); return; }
+  if (API_URL.indexOf('PASTE_') === 0){ fail('Not configured', 'API_URL has not been set in tasks.html.'); return; }
+
+  api({ api:'tasks', t:token }, function(res){
+    if (!res || !res.ok){
+      fail(res && res.error === 'expired' ? 'Link expired' : 'Could not load',
+           (res && res.message) || 'Tap View Tasks again in WhatsApp to get a fresh link.');
+      return;
+    }
+    DATA = res;
+    render();
+  }, function(){
+    fail('No connection', 'Check your internet and reload the page.');
+  });
+}
+
+function fail(title, msg){
+  document.getElementById('who').textContent = '';
+  document.getElementById('wrap').innerHTML =
+    '<div class="state"><div class="big">&#9888;</div><h2>' + esc(title) + '</h2><p>' + esc(msg) + '</p></div>';
+  document.getElementById('bar').style.display = 'none';
+}
+
+/* ---------- render ---------- */
+function render(){
+  var items = DATA.items || [];
+  document.getElementById('who').innerHTML =
+    'Hello <b>' + esc(DATA.doer) + '</b> &nbsp;&middot;&nbsp; ' + esc(DATA.date);
+
+  if (!items.length){
+    document.getElementById('wrap').innerHTML =
+      '<div class="state"><div class="big">&#127881;</div><h2>All clear</h2>' +
+      '<p>You have no open tasks. Thank you.</p></div>';
+    document.getElementById('bar').style.display = 'none';
+    return;
+  }
+
+  var overdue = items.filter(function(i){ return i.overdueBy > 0; }).length;
+
+  var html =
+    '<div class="summary">' +
+      '<div class="stat"><div class="v">' + items.length + '</div><div class="k">OPEN</div></div>' +
+      '<div class="stat od"><div class="v">' + overdue + '</div><div class="k">OVERDUE</div></div>' +
+      '<div class="stat dn"><div class="v" id="selCount">0</div><div class="k">SELECTED</div></div>' +
+    '</div>';
+
+  items.forEach(function(it){
+    var chips =
+      '<span class="chip type">' + esc(it.type) + '</span>' +
+      '<span class="chip ' + (it.overdueBy ? 'od' : 'due') + '">Due ' + esc(it.due) +
+        (it.overdueBy ? ' &middot; ' + it.overdueBy + 'd late' : '') + '</span>' +
+      (it.revisions ? '<span class="chip rev">Revision ' + it.revisions + '</span>' : '');
+
+    var revBtn = it.canRevise
+      ? '<button type="button" class="rev" data-k="' + esc(it.key) + '" data-m="rev">Need more time</button>'
+      : (it.type === 'DAILY'
+          ? '<button type="button" class="no" data-k="' + esc(it.key) + '" data-m="no">Not done</button>'
+          : '<button type="button" class="no" data-k="' + esc(it.key) + '" data-m="no" disabled style="opacity:.45">No revisions left</button>');
+
+    html +=
+      '<div class="task" id="c_' + esc(it.key) + '">' +
+        '<div class="top">' +
+          '<div class="name">' + esc(it.task) + '</div>' +
+          '<div class="meta">' + chips + '</div>' +
+        '</div>' +
+        '<div class="actions">' +
+          '<button type="button" class="done" data-k="' + esc(it.key) + '" data-m="done">Completed</button>' +
+          revBtn +
+        '</div>' +
+        '<div class="revbox" id="r_' + esc(it.key) + '">' +
+          '<label>WHY DOES IT NEED MORE TIME?</label>' +
+          '<select class="reason" data-k="' + esc(it.key) + '">' +
+            '<option value="">Choose a reason…</option>' +
+            (DATA.reasons || []).map(function(r, i){
+              return '<option value="' + i + '">' + esc(r) + '</option>';
+            }).join('') +
+          '</select>' +
+          '<div class="err" id="e_' + esc(it.key) + '">Please choose a reason and a new date.</div>' +
+          '<label>NEW DATE</label>' +
+          '<input type="date" class="newdate" data-k="' + esc(it.key) + '" min="' + esc(DATA.minDate) +
+            '" max="' + esc(DATA.maxDate) + '">' +
+          '<label id="nl_' + esc(it.key) + '">IN YOUR OWN WORDS (OPTIONAL)</label>' +
+          '<textarea class="note" data-k="' + esc(it.key) + '" maxlength="200" ' +
+            'placeholder="Say what happened, in your own words"></textarea>' +
+        '</div>' +
+      '</div>';
+  });
+
+  document.getElementById('wrap').innerHTML = html;
+  document.getElementById('bar').style.display = 'block';
+  wire();
+  refresh();
+}
+
+/* ---------- interaction ---------- */
+function wire(){
+  document.querySelectorAll('.actions button').forEach(function(b){
+    b.addEventListener('click', function(){
+      if (b.disabled) return;
+      var k = b.dataset.k, m = b.dataset.m;
+      var cur = STATE[k];
+
+      if (cur && cur.mode === m) delete STATE[k];              // tap again to undo
+      else STATE[k] = { mode:m, reason:'', note:'', date:'' };
+
+      paint(k);
+      refresh();
+    });
+  });
+
+  document.querySelectorAll('.reason').forEach(function(s){
+    s.addEventListener('change', function(){
+      var k = s.dataset.k;
+      if (STATE[k]) STATE[k].reason = s.value;
+
+      /* "Other" says nothing on its own, so the note is required there. */
+      var lbl = document.getElementById('nl_' + k);
+      var box = document.querySelector('.note[data-k="' + k + '"]');
+      if (lbl) lbl.textContent = isOther(s.value)
+        ? 'PLEASE TYPE THE REASON'
+        : 'IN YOUR OWN WORDS (OPTIONAL)';
+      if (box && isOther(s.value)) box.focus();
+
+      hideErr(k); refresh();
+    });
+  });
+
+  document.querySelectorAll('.newdate').forEach(function(d){
+    d.addEventListener('change', function(){
+      var k = d.dataset.k;
+      if (STATE[k]) STATE[k].date = d.value;
+      hideErr(k); refresh();
+    });
+  });
+
+  document.querySelectorAll('.note').forEach(function(t){
+    t.addEventListener('input', function(){
+      var k = t.dataset.k;
+      if (STATE[k]) STATE[k].note = t.value;
+    });
+  });
+
+  document.getElementById('submit').addEventListener('click', submit);
+}
+
+function paint(k){
+  var card = document.getElementById('c_' + k);
+  var box  = document.getElementById('r_' + k);
+  var st   = STATE[k];
+
+  card.className = 'task' + (st ? ' sel-' + (st.mode === 'rev' ? 'rev' : st.mode === 'no' ? 'no' : 'done') : '');
+  card.querySelectorAll('.actions button').forEach(function(b){
+    b.classList.toggle('on', !!st && st.mode === b.dataset.m);
+  });
+  box.classList.toggle('open', !!st && st.mode === 'rev');
+}
+
+function refresh(){
+  var n = Object.keys(STATE).length;
+  var el = document.getElementById('selCount');
+  if (el) el.textContent = n;
+
+  var done = 0, rev = 0, no = 0;
+  Object.keys(STATE).forEach(function(k){
+    if (STATE[k].mode === 'done') done++;
+    else if (STATE[k].mode === 'rev') rev++;
+    else no++;
+  });
+
+  var bits = [];
+  if (done) bits.push(done + ' completed');
+  if (rev)  bits.push(rev + ' moved');
+  if (no)   bits.push(no + ' not done');
+
+  document.getElementById('count').textContent = bits.length ? bits.join(' · ') : 'Nothing selected yet';
+  document.getElementById('submit').disabled = !n;
+  document.getElementById('submit').textContent = n ? 'Submit ' + n + ' update' + (n > 1 ? 's' : '') : 'Submit';
+}
+
+function isOther(idx){
+  if (idx === '' || idx == null) return false;
+  return String((DATA.reasons || [])[Number(idx)] || '').toLowerCase() === 'other';
+}
+
+function hideErr(k){ var e = document.getElementById('e_' + k); if (e) e.classList.remove('show'); }
+
+/* ---------- submit ---------- */
+function submit(){
+  var actions = [], bad = null;
+
+  Object.keys(STATE).forEach(function(k){
+    var s = STATE[k];
+    if (s.mode === 'done'){ actions.push(k + ':d'); return; }
+    if (s.mode === 'no')  { actions.push(k + ':n'); return; }
+
+    var needNote = isOther(s.reason) && !String(s.note || '').trim();
+    if (s.reason === '' || !s.date || needNote){
+      if (!bad) bad = k;
+      var e = document.getElementById('e_' + k);
+      if (e){
+        e.textContent = needNote
+          ? 'You chose Other, so please type the reason.'
+          : 'Please choose a reason and a new date.';
+        e.classList.add('show');
+      }
+      return;
+    }
+    /* encodeURIComponent escapes : and ; so the note cannot break the format */
+    var note = String(s.note || '').trim();
+    actions.push(k + ':r:' + s.reason + ':' + s.date.replace(/-/g, '') +
+                 (note ? ':' + encodeURIComponent(note) : ''));
+  });
+
+  if (bad){
+    toast('Add a reason and a new date first', 'bad');
+    document.getElementById('c_' + bad).scrollIntoView({ behavior:'smooth', block:'center' });
+    return;
+  }
+  if (!actions.length) return;
+
+  var btn = document.getElementById('submit');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  api({ api:'submit', t:token, a:actions.join(';') }, function(res){
+    if (!res || !res.ok){
+      btn.disabled = false;
+      refresh();
+      toast((res && res.message) || 'Could not save. Try again.', 'bad');
+      return;
+    }
+
+    var msg = [];
+    if (res.completed) msg.push(res.completed + ' completed');
+    if (res.revised)   msg.push(res.revised + ' moved');
+    toast(msg.join(', ') + '. Saved.', 'good');
+
+    STATE = {};
+    DATA.items = res.items || [];
+    setTimeout(render, 900);
+
+  }, function(){
+    btn.disabled = false;
+    refresh();
+    toast('No connection. Nothing was saved.', 'bad');
+  });
+}
+
+/* ---------- helpers ---------- */
+function toast(msg, kind){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (kind || '');
+  setTimeout(function(){ t.className = 'toast ' + (kind || ''); }, 3200);
+}
+
+function esc(v){
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+
+/* ---------- logo ---------- */
+(function(){
+  if (!LOGO_FILE) return;
+  var img = document.getElementById('logoImg');
+  img.onload  = function(){ document.getElementById('logoBox').classList.add('on'); };
+  img.onerror = function(){ /* no logo in the repo, header stays text only */ };
+  img.src = LOGO_FILE;
+})();
+
+load();
+</script>
+</body>
+</html>
