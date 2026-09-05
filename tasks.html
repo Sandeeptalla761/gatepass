@@ -37,9 +37,17 @@
   }
 
   header{
-    background:var(--navy); color:#fff; padding:16px 18px;
+    background:var(--navy); color:#fff; padding:14px 16px;
     position:sticky; top:0; z-index:20;
   }
+  .hrow{display:flex;align-items:center;gap:12px;}
+  .hrow .txt{flex:1;min-width:0;}
+  .logo{
+    background:#fff;border-radius:10px;padding:6px;flex:0 0 auto;
+    width:52px;height:52px;display:none;align-items:center;justify-content:center;
+  }
+  .logo.on{display:flex;}
+  .logo img{max-width:100%;max-height:100%;display:block;}
   header .co{font-size:15px;font-weight:700;letter-spacing:.2px;}
   header .tag{font-size:10px;letter-spacing:2.5px;color:#b9c4f0;margin-top:2px;}
   header .who{margin-top:10px;font-size:13px;color:#dbe2ff;}
@@ -140,8 +148,13 @@
 <body>
 
 <header>
-  <div class="co">Trans Valves India Private Limited</div>
-  <div class="tag">WHEN SAFETY MATTERS</div>
+  <div class="hrow">
+    <div class="logo" id="logoBox"><img id="logoImg" alt="TVL"></div>
+    <div class="txt">
+      <div class="co">Trans Valves India Private Limited</div>
+      <div class="tag">WHEN SAFETY MATTERS</div>
+    </div>
+  </div>
   <div class="who" id="who">Loading your tasks…</div>
 </header>
 
@@ -159,6 +172,11 @@
 <script>
 /* ===== SET THIS to your Apps Script /exec URL ===== */
 var API_URL = 'https://script.google.com/macros/s/AKfycbx9R5YC8AZfpvV4c1Lmk8Eq8al41zj5mbmlxI11NixcxJQNTpwTNdya61C8noPM_HGy/exec';
+
+/* Logo file sitting beside this page in the same repo folder.
+   Change the name to match yours. If the file is missing the header
+   simply renders without it, so a wrong name breaks nothing. */
+var LOGO_FILE = 'TVL-Logo.png';
 
 var token   = new URLSearchParams(location.search).get('t') || '';
 var STATE   = {};          // key -> {mode:'done'|'rev'|'no', reason:'', note:'', date:''}
@@ -428,6 +446,15 @@ function esc(v){
     return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
   });
 }
+
+/* ---------- logo ---------- */
+(function(){
+  if (!LOGO_FILE) return;
+  var img = document.getElementById('logoImg');
+  img.onload  = function(){ document.getElementById('logoBox').classList.add('on'); };
+  img.onerror = function(){ /* no logo in the repo, header stays text only */ };
+  img.src = LOGO_FILE;
+})();
 
 load();
 </script>
