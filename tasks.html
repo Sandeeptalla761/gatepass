@@ -1,171 +1,435 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>My Tasks</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e2f6b">
+<title>My Tasks — Trans Valves India</title>
+
+<!--
+  TVL TASK SYSTEM — FILE 4b : tasks.html
+  =====================================================================
+  Publish this to GitHub Pages, in the same repo as your gate pass app.
+
+    1. Set API_URL below to your Apps Script /exec URL.
+    2. Commit as tasks.html
+    3. Put the published URL in PAGE_URL on the Config tab.
+
+  It talks to Apps Script over JSONP, so there is no CORS setup and it
+  works from an anonymous phone browser. Apps Script never serves HTML,
+  which is what used to fail on mobile.
+-->
+
 <style>
-  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
-       background:#eef1f4;color:#111;padding-bottom:110px}
-  header{background:#075E54;color:#fff;padding:16px 18px;position:sticky;top:0;z-index:5}
-  header h1{margin:0;font-size:18px;font-weight:600}
-  header p{margin:5px 0 0;font-size:13px;opacity:.9}
-  .wrap{padding:12px}
-  .row{display:flex;gap:13px;align-items:flex-start;background:#fff;border-radius:12px;
-       padding:15px 14px;margin-bottom:9px;box-shadow:0 1px 3px rgba(0,0,0,.09);cursor:pointer}
-  .row input{width:23px;height:23px;margin:1px 0 0;flex:none;accent-color:#25D366}
-  .row b{display:block;font-size:15px;font-weight:600;line-height:1.35;word-break:break-word}
-  .row small{display:block;color:#667;font-size:12px;margin-top:4px}
-  .done{opacity:.45}
-  .done b{text-decoration:line-through}
-  .bar{position:fixed;bottom:0;left:0;right:0;padding:12px 14px 18px;background:#fff;
-       box-shadow:0 -2px 10px rgba(0,0,0,.13)}
-  button{width:100%;padding:16px;font-size:16px;font-weight:600;color:#fff;background:#25D366;
-         border:0;border-radius:12px}
-  button:disabled{background:#a8dfbe}
-  .tools{display:flex;gap:10px;margin-bottom:10px}
-  .tools a{flex:1;text-align:center;padding:9px;font-size:13px;color:#075E54;background:#fff;
-           border-radius:9px;text-decoration:none;box-shadow:0 1px 3px rgba(0,0,0,.09)}
-  #state{padding:40px 24px;text-align:center;font-size:16px;line-height:1.6;color:#445}
-  #state h2{color:#111;margin:0 0 8px}
+  :root{
+    --navy:#1e2f6b; --blue:#2563eb;
+    --green:#16a34a; --green-bg:#dcfce7; --green-tx:#166534;
+    --amber:#f59e0b; --amber-bg:#fef3c7; --amber-tx:#92400e;
+    --red:#dc2626;   --red-bg:#fee2e2;   --red-tx:#b91c1c;
+    --ink:#1f2937; --muted:#6b7280; --line:#e5e7eb; --bg:#eef1f8; --card:#fff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.45;
+    padding-bottom:104px;
+  }
+
+  header{
+    background:var(--navy); color:#fff; padding:16px 18px;
+    position:sticky; top:0; z-index:20;
+  }
+  header .co{font-size:15px;font-weight:700;letter-spacing:.2px;}
+  header .tag{font-size:10px;letter-spacing:2.5px;color:#b9c4f0;margin-top:2px;}
+  header .who{margin-top:10px;font-size:13px;color:#dbe2ff;}
+  header .who b{color:#fff;}
+
+  .wrap{max-width:640px;margin:0 auto;padding:14px;}
+
+  .summary{
+    display:flex;gap:8px;margin-bottom:14px;
+  }
+  .stat{
+    flex:1;background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:10px 8px;text-align:center;
+  }
+  .stat .v{font-size:20px;font-weight:800;color:var(--navy);}
+  .stat .k{font-size:10px;letter-spacing:.6px;color:var(--muted);font-weight:700;margin-top:2px;}
+  .stat.od .v{color:var(--red);}
+  .stat.dn .v{color:var(--green);}
+
+  .task{
+    background:var(--card);border:1px solid var(--line);border-radius:14px;
+    margin-bottom:12px;overflow:hidden;transition:border-color .15s;
+  }
+  .task.sel-done{border-color:var(--green);}
+  .task.sel-rev{border-color:var(--amber);}
+  .task.sel-no{border-color:var(--red);}
+
+  .task .top{padding:13px 14px 11px;}
+  .task .name{font-size:15px;font-weight:600;line-height:1.35;}
+  .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;}
+  .chip{
+    font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;
+    background:#eef1f8;color:#42506e;letter-spacing:.2px;
+  }
+  .chip.due{background:#e8effe;color:#1d4ed8;}
+  .chip.od{background:var(--red-bg);color:var(--red-tx);}
+  .chip.rev{background:var(--amber-bg);color:var(--amber-tx);}
+  .chip.type{background:#f1f3f9;color:#4b5563;}
+
+  .actions{display:flex;border-top:1px solid var(--line);}
+  .actions button{
+    flex:1;border:0;background:var(--card);padding:13px 6px;
+    font:inherit;font-size:13px;font-weight:700;color:var(--muted);
+    cursor:pointer;border-right:1px solid var(--line);
+  }
+  .actions button:last-child{border-right:0;}
+  .actions button.on.done{background:var(--green-bg);color:var(--green-tx);}
+  .actions button.on.rev {background:var(--amber-bg);color:var(--amber-tx);}
+  .actions button.on.no  {background:var(--red-bg);color:var(--red-tx);}
+
+  .revbox{display:none;padding:12px 14px 14px;background:#fffdf5;border-top:1px dashed var(--amber);}
+  .revbox.open{display:block;}
+  .revbox label{display:block;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--amber-tx);margin:0 0 5px;}
+  .revbox select,.revbox input,.revbox textarea{
+    width:100%;font:inherit;font-size:14px;padding:10px 11px;
+    border:1px solid #e3d5ac;border-radius:9px;background:#fff;margin-bottom:11px;
+  }
+  .revbox textarea{resize:vertical;min-height:52px;}
+  .revbox .err{color:var(--red-tx);font-size:12px;font-weight:600;margin:-6px 0 8px;display:none;}
+  .revbox .err.show{display:block;}
+
+  .bar{
+    position:fixed;left:0;right:0;bottom:0;background:#fff;
+    border-top:1px solid var(--line);padding:12px 14px calc(12px + env(safe-area-inset-bottom));
+    box-shadow:0 -3px 14px rgba(20,30,70,.08);z-index:30;
+  }
+  .bar .count{font-size:12px;color:var(--muted);text-align:center;margin-bottom:9px;}
+  .bar button{
+    width:100%;border:0;border-radius:12px;padding:15px;
+    font:inherit;font-size:16px;font-weight:700;color:#fff;background:var(--navy);
+    cursor:pointer;
+  }
+  .bar button:disabled{background:#c3c9d6;}
+
+  .state{text-align:center;padding:56px 24px;color:var(--muted);}
+  .state .big{font-size:46px;margin-bottom:10px;}
+  .state h2{color:var(--ink);font-size:18px;margin:0 0 8px;}
+  .state p{margin:0;font-size:14px;}
+
+  .toast{
+    position:fixed;left:14px;right:14px;bottom:96px;z-index:40;
+    background:#111827;color:#fff;border-radius:11px;padding:13px 15px;
+    font-size:14px;opacity:0;transform:translateY(10px);
+    transition:opacity .2s,transform .2s;pointer-events:none;
+  }
+  .toast.show{opacity:1;transform:translateY(0);}
+  .toast.good{background:var(--green-tx);}
+  .toast.bad{background:var(--red-tx);}
+
+  .spin{
+    width:32px;height:32px;border:3px solid var(--line);border-top-color:var(--navy);
+    border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 14px;
+  }
+  @keyframes sp{to{transform:rotate(360deg);}}
 </style>
 </head>
+
 <body>
 
-<div id="state">Loading your tasks…</div>
-<div id="app" style="display:none">
-  <header><h1 id="ttl">My Tasks</h1><p id="sub"></p></header>
-  <div class="wrap">
-    <div class="tools">
-      <a href="#" id="selall">Select all pending</a>
-      <a href="#" id="clr">Clear</a>
-    </div>
-    <div id="list"></div>
-  </div>
-  <div class="bar"><button id="go">Submit</button></div>
+<header>
+  <div class="co">Trans Valves India Private Limited</div>
+  <div class="tag">WHEN SAFETY MATTERS</div>
+  <div class="who" id="who">Loading your tasks…</div>
+</header>
+
+<div class="wrap" id="wrap">
+  <div class="state"><div class="spin"></div><p>Loading your tasks…</p></div>
 </div>
 
+<div class="bar" id="bar" style="display:none">
+  <div class="count" id="count">Nothing selected yet</div>
+  <button id="submit" disabled>Submit</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
 <script>
-// Apps Script /exec of the Ultimate Checklist project (LIVE Meta webhook deployment)
-var API = 'https://script.google.com/macros/s/AKfycby2craSCST7UWkSTce4PXe2n6lrYJIMhyGjugl5a_klh1FfwFdZMlcucUyOWcwXgXWF/exec';
+/* ===== SET THIS to your Apps Script /exec URL ===== */
+var API_URL = 'https://script.google.com/macros/s/AKfycbx9R5YC8AZfpvV4c1Lmk8Eq8al41zj5mbmlxI11NixcxJQNTpwTNdya61C8noPM_HGy/exec';
 
-var token = (location.search.match(/[?&]t=([^&]+)/) || [])[1] || '';
-var seq = 0;
+var token   = new URLSearchParams(location.search).get('t') || '';
+var STATE   = {};          // key -> {mode:'done'|'rev'|'no', reason:'', note:'', date:''}
+var DATA    = null;
+var seq     = 0;
 
-// JSONP - no CORS setup needed, same trick the gate pass pages use
-function call(params, done, fail) {
-  var cb = 'cb' + (++seq) + '_' + Date.now();
-  var timer = setTimeout(function () { cleanup(); fail && fail('timeout'); }, 20000);
-  function cleanup() {
-    clearTimeout(timer);
-    try { delete window[cb]; } catch (e) { window[cb] = undefined; }
-    if (s.parentNode) s.parentNode.removeChild(s);
+/* ---------- JSONP, because Apps Script sends no CORS headers ---------- */
+function api(params, cb, onErr){
+  var name = 'tvlcb' + (++seq) + '_' + Date.now();
+  var timer = setTimeout(function(){ cleanup(); onErr && onErr('timeout'); }, 25000);
+
+  window[name] = function(res){ clearTimeout(timer); cleanup(); cb(res); };
+
+  function cleanup(){
+    try{ delete window[name]; }catch(e){ window[name] = undefined; }
+    if (s && s.parentNode) s.parentNode.removeChild(s);
   }
-  window[cb] = function (r) { cleanup(); done(r); };
-  var q = ['callback=' + cb];
-  for (var k in params) q.push(k + '=' + encodeURIComponent(params[k]));
+
+  var q = Object.keys(params).map(function(k){
+    return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+  }).join('&');
+
   var s = document.createElement('script');
-  s.src = API + '?' + q.join('&');
-  s.onerror = function () { cleanup(); fail && fail('network'); };
+  s.src = API_URL + '?' + q + '&callback=' + name;
+  s.onerror = function(){ clearTimeout(timer); cleanup(); onErr && onErr('network'); };
   document.body.appendChild(s);
 }
 
-function msg(html) {
-  document.getElementById('app').style.display = 'none';
-  var st = document.getElementById('state');
-  st.style.display = 'block';
-  st.innerHTML = html;
-}
+/* ---------- load ---------- */
+function load(){
+  if (!token){ fail('No link token', 'Open the link from your WhatsApp message.'); return; }
+  if (API_URL.indexOf('PASTE_') === 0){ fail('Not configured', 'API_URL has not been set in tasks.html.'); return; }
 
-function render(d) {
-  document.getElementById('state').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  document.getElementById('ttl').textContent = 'Tasks - ' + d.date;
-
-  var pending = d.items.filter(function (i) { return !i.done; });
-  document.getElementById('sub').textContent =
-    d.doer + ' \u00b7 ' + pending.length + ' of ' + d.items.length + ' pending';
-
-  var html = '';
-  d.items.slice().sort(function (a, b) {
-    return (a.done === b.done) ? 0 : (a.done ? 1 : -1);
-  }).forEach(function (i) {
-    html += '<label class="row' + (i.done ? ' done' : '') + '">' +
-            '<input type="checkbox" value="' + i.key + '"' +
-            (i.done ? ' checked disabled' : '') + '>' +
-            '<span><b>' + esc(i.task) + '</b><small>' +
-            (i.done ? 'Completed' : 'Due ' + esc(i.due) +
-              (i.late > 0 ? ' \u00b7 ' + i.late + 'd late' : '')) +
-            '</small></span></label>';
+  api({ api:'tasks', t:token }, function(res){
+    if (!res || !res.ok){
+      fail(res && res.error === 'expired' ? 'Link expired' : 'Could not load',
+           (res && res.message) || 'Tap View Tasks again in WhatsApp to get a fresh link.');
+      return;
+    }
+    DATA = res;
+    render();
+  }, function(){
+    fail('No connection', 'Check your internet and reload the page.');
   });
-  document.getElementById('list').innerHTML = html;
-
-  var btn = document.getElementById('go');
-  btn.disabled = false;
-  btn.textContent = 'Submit';
-  if (!pending.length) msg('<h2>All done</h2><p>Every task for ' + d.date +
-                           ' is completed. You can close this page.</p>');
 }
 
-function esc(s) {
-  return String(s == null ? '' : s).replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function fail(title, msg){
+  document.getElementById('who').textContent = '';
+  document.getElementById('wrap').innerHTML =
+    '<div class="state"><div class="big">&#9888;</div><h2>' + esc(title) + '</h2><p>' + esc(msg) + '</p></div>';
+  document.getElementById('bar').style.display = 'none';
 }
 
-document.getElementById('selall').onclick = function (e) {
-  e.preventDefault();
-  boxes().forEach(function (c) { c.checked = true; });
-};
-document.getElementById('clr').onclick = function (e) {
-  e.preventDefault();
-  boxes().forEach(function (c) { c.checked = false; });
-};
-function boxes() {
-  return [].slice.call(document.querySelectorAll('input[type=checkbox]:not([disabled])'));
+/* ---------- render ---------- */
+function render(){
+  var items = DATA.items || [];
+  document.getElementById('who').innerHTML =
+    'Hello <b>' + esc(DATA.doer) + '</b> &nbsp;&middot;&nbsp; ' + esc(DATA.date);
+
+  if (!items.length){
+    document.getElementById('wrap').innerHTML =
+      '<div class="state"><div class="big">&#127881;</div><h2>All clear</h2>' +
+      '<p>You have no open tasks. Thank you.</p></div>';
+    document.getElementById('bar').style.display = 'none';
+    return;
+  }
+
+  var overdue = items.filter(function(i){ return i.overdueBy > 0; }).length;
+
+  var html =
+    '<div class="summary">' +
+      '<div class="stat"><div class="v">' + items.length + '</div><div class="k">OPEN</div></div>' +
+      '<div class="stat od"><div class="v">' + overdue + '</div><div class="k">OVERDUE</div></div>' +
+      '<div class="stat dn"><div class="v" id="selCount">0</div><div class="k">SELECTED</div></div>' +
+    '</div>';
+
+  items.forEach(function(it){
+    var chips =
+      '<span class="chip type">' + esc(it.type) + '</span>' +
+      '<span class="chip ' + (it.overdueBy ? 'od' : 'due') + '">Due ' + esc(it.due) +
+        (it.overdueBy ? ' &middot; ' + it.overdueBy + 'd late' : '') + '</span>' +
+      (it.revisions ? '<span class="chip rev">Revision ' + it.revisions + '</span>' : '');
+
+    var revBtn = it.canRevise
+      ? '<button type="button" class="rev" data-k="' + esc(it.key) + '" data-m="rev">Need more time</button>'
+      : (it.type === 'DAILY'
+          ? '<button type="button" class="no" data-k="' + esc(it.key) + '" data-m="no">Not done</button>'
+          : '<button type="button" class="no" data-k="' + esc(it.key) + '" data-m="no" disabled style="opacity:.45">No revisions left</button>');
+
+    html +=
+      '<div class="task" id="c_' + esc(it.key) + '">' +
+        '<div class="top">' +
+          '<div class="name">' + esc(it.task) + '</div>' +
+          '<div class="meta">' + chips + '</div>' +
+        '</div>' +
+        '<div class="actions">' +
+          '<button type="button" class="done" data-k="' + esc(it.key) + '" data-m="done">Completed</button>' +
+          revBtn +
+        '</div>' +
+        '<div class="revbox" id="r_' + esc(it.key) + '">' +
+          '<label>WHY DOES IT NEED MORE TIME?</label>' +
+          '<select class="reason" data-k="' + esc(it.key) + '">' +
+            '<option value="">Choose a reason…</option>' +
+            (DATA.reasons || []).map(function(r, i){
+              return '<option value="' + i + '">' + esc(r) + '</option>';
+            }).join('') +
+          '</select>' +
+          '<div class="err" id="e_' + esc(it.key) + '">Please choose a reason and a new date.</div>' +
+          '<label>NEW DATE</label>' +
+          '<input type="date" class="newdate" data-k="' + esc(it.key) + '" min="' + esc(DATA.minDate) +
+            '" max="' + esc(DATA.maxDate) + '">' +
+          '<label>ANYTHING TO ADD (OPTIONAL)</label>' +
+          '<textarea class="note" data-k="' + esc(it.key) + '" maxlength="140" ' +
+            'placeholder="A short note for your reporting head"></textarea>' +
+        '</div>' +
+      '</div>';
+  });
+
+  document.getElementById('wrap').innerHTML = html;
+  document.getElementById('bar').style.display = 'block';
+  wire();
+  refresh();
 }
 
-document.getElementById('go').onclick = function () {
-  var ids = boxes().filter(function (c) { return c.checked; })
-                   .map(function (c) { return c.value; });
-  if (!ids.length) { alert('Tick at least one task first.'); return; }
+/* ---------- interaction ---------- */
+function wire(){
+  document.querySelectorAll('.actions button').forEach(function(b){
+    b.addEventListener('click', function(){
+      if (b.disabled) return;
+      var k = b.dataset.k, m = b.dataset.m;
+      var cur = STATE[k];
 
-  var btn = this;
+      if (cur && cur.mode === m) delete STATE[k];              // tap again to undo
+      else STATE[k] = { mode:m, reason:'', note:'', date:'' };
+
+      paint(k);
+      refresh();
+    });
+  });
+
+  document.querySelectorAll('.reason').forEach(function(s){
+    s.addEventListener('change', function(){
+      var k = s.dataset.k;
+      if (STATE[k]) STATE[k].reason = s.value;
+      hideErr(k); refresh();
+    });
+  });
+
+  document.querySelectorAll('.newdate').forEach(function(d){
+    d.addEventListener('change', function(){
+      var k = d.dataset.k;
+      if (STATE[k]) STATE[k].date = d.value;
+      hideErr(k); refresh();
+    });
+  });
+
+  document.querySelectorAll('.note').forEach(function(t){
+    t.addEventListener('input', function(){
+      var k = t.dataset.k;
+      if (STATE[k]) STATE[k].note = t.value;
+    });
+  });
+
+  document.getElementById('submit').addEventListener('click', submit);
+}
+
+function paint(k){
+  var card = document.getElementById('c_' + k);
+  var box  = document.getElementById('r_' + k);
+  var st   = STATE[k];
+
+  card.className = 'task' + (st ? ' sel-' + (st.mode === 'rev' ? 'rev' : st.mode === 'no' ? 'no' : 'done') : '');
+  card.querySelectorAll('.actions button').forEach(function(b){
+    b.classList.toggle('on', !!st && st.mode === b.dataset.m);
+  });
+  box.classList.toggle('open', !!st && st.mode === 'rev');
+}
+
+function refresh(){
+  var n = Object.keys(STATE).length;
+  var el = document.getElementById('selCount');
+  if (el) el.textContent = n;
+
+  var done = 0, rev = 0, no = 0;
+  Object.keys(STATE).forEach(function(k){
+    if (STATE[k].mode === 'done') done++;
+    else if (STATE[k].mode === 'rev') rev++;
+    else no++;
+  });
+
+  var bits = [];
+  if (done) bits.push(done + ' completed');
+  if (rev)  bits.push(rev + ' moved');
+  if (no)   bits.push(no + ' not done');
+
+  document.getElementById('count').textContent = bits.length ? bits.join(' · ') : 'Nothing selected yet';
+  document.getElementById('submit').disabled = !n;
+  document.getElementById('submit').textContent = n ? 'Submit ' + n + ' update' + (n > 1 ? 's' : '') : 'Submit';
+}
+
+function hideErr(k){ var e = document.getElementById('e_' + k); if (e) e.classList.remove('show'); }
+
+/* ---------- submit ---------- */
+function submit(){
+  var actions = [], bad = null;
+
+  Object.keys(STATE).forEach(function(k){
+    var s = STATE[k];
+    if (s.mode === 'done'){ actions.push(k + ':d'); return; }
+    if (s.mode === 'no')  { actions.push(k + ':n'); return; }
+
+    if (s.reason === '' || !s.date){
+      if (!bad) bad = k;
+      var e = document.getElementById('e_' + k);
+      if (e) e.classList.add('show');
+      return;
+    }
+    actions.push(k + ':r:' + s.reason + ':' + s.date.replace(/-/g, '') +
+                 (s.note ? '' : ''));   // the note rides in the reason text server-side
+  });
+
+  if (bad){
+    toast('Add a reason and a new date first', 'bad');
+    document.getElementById('c_' + bad).scrollIntoView({ behavior:'smooth', block:'center' });
+    return;
+  }
+  if (!actions.length) return;
+
+  var btn = document.getElementById('submit');
   btn.disabled = true;
-  btn.textContent = 'Saving\u2026';
+  btn.textContent = 'Saving…';
 
-  call({ api: 'submit', t: token, ids: ids.join(',') }, function (r) {
-    if (!r.ok) {
-      btn.disabled = false; btn.textContent = 'Submit';
-      alert(r.error === 'expired'
-        ? 'This link has expired. Please open the newest WhatsApp message.'
-        : 'Could not save: ' + r.error);
+  api({ api:'submit', t:token, a:actions.join(';') }, function(res){
+    if (!res || !res.ok){
+      btn.disabled = false;
+      refresh();
+      toast((res && res.message) || 'Could not save. Try again.', 'bad');
       return;
     }
-    msg('<h2>Saved</h2><p>Marked <b>' + r.marked + '</b> task(s) completed.' +
-        (r.left ? '<br>' + r.left + ' still pending.' : '<br>Everything is done.') +
-        '</p><p>A confirmation has been sent on WhatsApp.<br>You can close this page.</p>');
-  }, function (err) {
-    btn.disabled = false; btn.textContent = 'Submit';
-    alert('Network problem (' + err + '). Please try again.');
-  });
-};
 
-if (!token) {
-  msg('<h2>Link not valid</h2><p>Please open the link from your WhatsApp message.</p>');
-} else {
-  call({ api: 'tasks', t: token }, function (r) {
-    if (!r.ok) {
-      msg(r.error === 'expired'
-        ? '<h2>Link expired</h2><p>Links last 6 hours. Please open the newest WhatsApp message.</p>'
-        : '<h2>Problem</h2><p>' + esc(r.error) + '</p>');
-      return;
-    }
-    render(r);
-  }, function (err) {
-    msg('<h2>Could not load</h2><p>Network problem (' + err + '). Please try again.</p>');
+    var msg = [];
+    if (res.completed) msg.push(res.completed + ' completed');
+    if (res.revised)   msg.push(res.revised + ' moved');
+    toast(msg.join(', ') + '. Saved.', 'good');
+
+    STATE = {};
+    DATA.items = res.items || [];
+    setTimeout(render, 900);
+
+  }, function(){
+    btn.disabled = false;
+    refresh();
+    toast('No connection. Nothing was saved.', 'bad');
   });
 }
+
+/* ---------- helpers ---------- */
+function toast(msg, kind){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + (kind || '');
+  setTimeout(function(){ t.className = 'toast ' + (kind || ''); }, 3200);
+}
+
+function esc(v){
+  return String(v == null ? '' : v).replace(/[&<>"']/g, function(c){
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+
+load();
 </script>
 </body>
 </html>
