@@ -85,6 +85,7 @@
   .chip.due{background:#e8effe;color:#1d4ed8;}
   .chip.od{background:var(--red-bg);color:var(--red-tx);}
   .chip.rev{background:var(--amber-bg);color:var(--amber-tx);}
+  .chip.soon{background:#f1f3f9;color:#6b7280;}
   .chip.type{background:#f1f3f9;color:#4b5563;}
 
   .actions{display:flex;border-top:1px solid var(--line);}
@@ -244,20 +245,24 @@ function render(){
     return;
   }
 
-  var overdue = items.filter(function(i){ return i.overdueBy > 0; }).length;
+  var overdue  = items.filter(function(i){ return i.overdueBy > 0; }).length;
+  var upcoming = items.filter(function(i){ return (i.daysUntil || 0) > 0; }).length;
 
+  /* Work due tomorrow appears here on purpose — the reminder is sent a
+     day early. Counting it separately stops the list looking inflated. */
   var html =
     '<div class="summary">' +
-      '<div class="stat"><div class="v">' + items.length + '</div><div class="k">OPEN</div></div>' +
+      '<div class="stat"><div class="v">' + (items.length - upcoming) + '</div><div class="k">DUE NOW</div></div>' +
       '<div class="stat od"><div class="v">' + overdue + '</div><div class="k">OVERDUE</div></div>' +
+      '<div class="stat"><div class="v">' + upcoming + '</div><div class="k">COMING UP</div></div>' +
       '<div class="stat dn"><div class="v" id="selCount">0</div><div class="k">SELECTED</div></div>' +
     '</div>';
 
   items.forEach(function(it){
     var chips =
       '<span class="chip type">' + esc(it.type) + '</span>' +
-      '<span class="chip ' + (it.overdueBy ? 'od' : 'due') + '">Due ' + esc(it.due) +
-        (it.overdueBy ? ' &middot; ' + it.overdueBy + 'd late' : '') + '</span>' +
+      '<span class="chip ' + (it.overdueBy ? 'od' : (it.daysUntil > 0 ? 'soon' : 'due')) + '">' +
+        esc(it.whenTxt || ('Due ' + it.due)) + '</span>' +
       (it.revisions ? '<span class="chip rev">Revision ' + it.revisions + '</span>' : '');
 
     var revBtn = it.canRevise
