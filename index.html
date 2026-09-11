@@ -115,6 +115,11 @@
     <textarea id="manual" placeholder="GP|260731|205|SUPPLIER|ITEM^6^PCS~ITEM^2^PCS|VEHICLE|260820"></textarea>
     <button onclick="submitManual()">Look up</button>
   </div>
+  <div class="card hide" id="gpNoCard">
+    <div class="lbl">Can't scan the QR? Find by gate pass number (Admin)</div>
+    <input id="gpNoSearch" type="tel" inputmode="numeric" placeholder="e.g. 277">
+    <button class="grey" onclick="submitGpNo()">Find</button>
+  </div>
   <div class="card">
     <div class="lbl">Recent gate passes</div>
     <div id="recent"><div class="empty">Loading&hellip;</div></div>
@@ -235,6 +240,7 @@ function backToScan(){
   CURRENT=null; PAYLOAD=''; lastCode='';
   var g=document.getElementById('gatePin'); if(g) g.value='';
   document.getElementById('manual').value='';
+  document.getElementById('gpNoSearch').value='';
   show('scan');
   say('busy','Ready','Tap Start camera and point at a gate pass QR.');
   loadRecent();
@@ -281,6 +287,10 @@ function lock(){
   stop(); PIN=''; WHO=''; CURRENT=null;
   ADMIN_MODE=false; ADMIN_PIN='';
   document.getElementById('adminBadge').className='hide';
+  ['oForce','oEdit','rForce','gpNoCard'].forEach(function(id){
+    var b=document.getElementById(id);
+    if(b) b.classList.add('hide');
+  });
   document.getElementById('pin').value='';
   show('gate');
   document.getElementById('status').className='status';
@@ -304,7 +314,7 @@ function unlockAdmin(){
     if(!r.ok){ say('bad','Not unlocked',esc(r.msg||'Admin PIN is wrong.')); return; }
     ADMIN_MODE=true; ADMIN_PIN=ap;
     document.getElementById('adminBadge').className='';
-    ['oForce','oEdit','rForce'].forEach(function(id){
+    ['oForce','oEdit','rForce','gpNoCard'].forEach(function(id){
       var b=document.getElementById(id);
       if(b) b.classList.remove('hide');
     });
@@ -357,23 +367,23 @@ function submitManual(){
   lookup(v);
 }
 
-/* ---------- step 1: look up ---------- */
-function lookup(payload){
+/* ---------- step 1: look up (by QR, or by number if it can't be scanned) ---------- */
+function doLookup(req, notFoundTitle){
   if(busy) return;
   busy=true;
-  say('busy','Reading\u2026','');
+  say('busy','Looking up\u2026','');
 
-  call({action:'lookup',pin:PIN,payload:payload}).then(function(r){
+  call(req).then(function(r){
     busy=false;
     if(r.authFail){ lock(); say('bad','Session locked',esc(r.msg)); return; }
     if(!r.ok){
       if(navigator.vibrate) navigator.vibrate([120,80,120]);
-      say('bad','Cannot read that code',esc(r.msg));
+      say('bad',notFoundTitle,esc(r.msg));
       lastCode='';
       return;
     }
     stop();
-    CURRENT=r; PAYLOAD=payload;
+    CURRENT=r;
 
     if(r.mode==='gateout'){
       showGateOut();
@@ -385,6 +395,20 @@ function lookup(payload){
     say('bad','Connection problem',esc(String(e))+'<br>Nothing was saved.');
     lastCode='';
   });
+}
+
+function lookup(payload){
+  PAYLOAD=payload;
+  doLookup({action:'lookup',pin:PIN,payload:payload}, 'Cannot read that code');
+}
+
+/** Fallback when the printed QR won't scan or read: find the pass by its
+ *  gate pass number alone. Admin-only. */
+function submitGpNo(){
+  if(!ADMIN_MODE){ say('bad','Admin tools are locked','Tap "admin tools" first.'); return; }
+  var v=document.getElementById('gpNoSearch').value.trim();
+  if(!v){ say('bad','Enter a gate pass number',''); return; }
+  doLookup({action:'lookupno',pin:PIN,by:WHO,gpNo:v,adminPin:ADMIN_PIN}, 'Not found');
 }
 
 function headerHtml(r){
@@ -775,6 +799,9 @@ document.getElementById('pin').addEventListener('keydown',function(e){
 });
 document.getElementById('who').addEventListener('keydown',function(e){
   if(e.key==='Enter') unlock();
+});
+document.getElementById('gpNoSearch').addEventListener('keydown',function(e){
+  if(e.key==='Enter') submitGpNo();
 });
 </script>
 
