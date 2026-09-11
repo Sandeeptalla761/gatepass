@@ -254,10 +254,27 @@ function unlock(){
     document.getElementById('whoLabel').textContent=who;
     show('scan');
     renderRecent(r.rows||[]);
-    say('busy','Ready','Tap Start camera and point at a gate pass QR.');
+    var preload=preloadFromUrl();
+    if(preload){
+      document.getElementById('manual').value=preload;
+      say('busy','Gate pass loaded',
+          'Check the details below, then tap Look up.');
+      document.getElementById('manual').scrollIntoView({behavior:'smooth'});
+    } else {
+      say('busy','Ready','Tap Start camera and point at a gate pass QR.');
+    }
   }).catch(function(e){
     say('bad','Cannot reach the server', esc(String(e)));
   });
+}
+
+/** Picks up ?d=<payload> if this page was opened via the Apps Script
+ *  web app URL's redirect (older QR-to-URL flows, kept for compatibility). */
+function preloadFromUrl(){
+  try{
+    var v=new URLSearchParams(window.location.search).get('d');
+    return v ? decodeURIComponent(v) : '';
+  }catch(e){ return ''; }
 }
 
 function lock(){
