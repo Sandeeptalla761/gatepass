@@ -207,17 +207,23 @@
     <div class="lbl">Materials</div>
     <table class="items">
       <thead><tr>
-        <th style="width:29%">Material name</th>
-        <th style="width:25%">Remarks</th>
-        <th style="width:12%">Unit</th>
-        <th style="width:11%">Qty</th>
-        <th style="width:16%">Value in INR</th>
+        <th style="width:26%">Material name</th>
+        <th style="width:22%">Remarks</th>
+        <th style="width:11%">Unit</th>
+        <th style="width:10%">Qty</th>
+        <th style="width:14%">Value in INR</th>
+        <th class="nonret-col hide" style="width:11%">Non-Ret.</th>
         <th></th>
       </tr></thead>
       <tbody id="rows"></tbody>
     </table>
     <button class="grey sm" style="margin-top:10px" onclick="addRow()">
       + Add material</button>
+    <button class="grey sm" style="margin-top:10px" id="btnNonRet"
+            onclick="unlockNonRet()">
+      &#128274; Mark non-returnable (Admin)</button>
+    <span id="nonRetTag" class="hide"
+          style="color:#e2a03f;font-size:12px;margin-left:8px">ADMIN MODE ON</span>
   </div>
 
   <div class="card">
@@ -323,6 +329,7 @@ var NUM_OK=false;
 var MANUAL_NO=false;
 var EDIT_GP='';
 var ADMIN_PIN='';
+var ADMIN_MODE=false;   // unlocked via "Mark non-returnable (Admin)"
 
 function call(b){
   return fetch(ENDPOINT,{method:'POST',body:JSON.stringify(b),redirect:'follow'})
@@ -377,7 +384,44 @@ function lock(){
   document.getElementById('done').className='hide';
   document.getElementById('admin').className='hide';
   document.getElementById('gate').className='card';
-  MANUAL_NO=false; ADMIN_PIN='';
+  MANUAL_NO=false; ADMIN_PIN=''; ADMIN_MODE=false;
+  document.getElementById('nonRetTag').className='hide';
+  document.querySelectorAll('.nonret-col').forEach(function(el){
+    el.classList.add('hide');
+  });
+}
+
+/** Admin-only: reveal the "Non-returnable" checkbox on every material
+ *  row. Server-side, saveCreation/updateGatePass refuse to store a
+ *  non-returnable flag without a valid admin PIN regardless of what the
+ *  page sends, so this unlock is a convenience, not the real gate. */
+function unlockNonRet(){
+  if(ADMIN_MODE){
+    say('ok','Admin mode already on',
+        'Tick "Non-Ret." next to any material that never needs to come back.');
+    return;
+  }
+  var ap=prompt('Admin PIN:');
+  if(ap===null) return;
+  ap=String(ap).trim();
+  if(!ap){ say('bad','No admin PIN entered',''); return; }
+
+  say('busy','Checking the admin PIN\u2026','');
+  withTimeout(call({action:'admin',pin:PIN,adminPin:ap}), 25000)
+  .then(function(r){
+    if(r.authFail){ lock(); say('bad','Session locked',esc(r.msg)); return; }
+    if(!r.ok){ say('bad','Not unlocked',esc(r.msg||'Admin PIN is wrong.')); return; }
+
+    ADMIN_MODE=true; ADMIN_PIN=ap;
+    document.getElementById('nonRetTag').className='';
+    document.querySelectorAll('.nonret-col').forEach(function(el){
+      el.classList.remove('hide');
+    });
+    say('ok','Admin mode on',
+        'Tick "Non-Ret." next to any material that never needs to come back.');
+  }).catch(function(e){
+    say('bad','Cannot reach the server',esc(String(e)));
+  });
 }
 
 function setToday(){
@@ -406,8 +450,15 @@ function addRow(){
     '</select></td>'+
     '<td><input class="m-qty" type="number" min="1" value="1"></td>'+
     '<td><input class="m-val" type="number" min="0" step="0.01" value="0"></td>'+
+    '<td class="nonret-col hide" style="text-align:center">'+
+      '<input class="m-nonret" type="checkbox"></td>'+
     '<td><button class="del" onclick="delRow(this)">&times;</button></td>';
   tb.appendChild(tr);
+  if(ADMIN_MODE){
+    tr.querySelectorAll('.nonret-col').forEach(function(el){
+      el.classList.remove('hide');
+    });
+  }
 }
 
 function delRow(btn){
@@ -421,12 +472,14 @@ function collect(){
   for(var i=0;i<trs.length;i++){
     var name=trs[i].querySelector('.m-name').value.trim();
     if(!name) continue;
+    var nr=trs[i].querySelector('.m-nonret');
     out.push({
       name:up(name),
       rem: up(trs[i].querySelector('.m-rem').value),
       uom: up(trs[i].querySelector('.m-uom').value) || "NO'S",
       qty: Number(trs[i].querySelector('.m-qty').value) || 1,
-      val: Number(trs[i].querySelector('.m-val').value) || 0
+      val: Number(trs[i].querySelector('.m-val').value) || 0,
+      nonret: !!(nr && nr.checked)
     });
   }
   return out;
@@ -506,7 +559,7 @@ function createPass(){
   say('busy','Pass ready \u2014 saving to the register\u2026',
       'You can print now; the save is still running.');
 
-  var extras = items.map(function(it){ return {rem:it.rem, val:it.val}; });
+  var extras = items.map(function(it){ return {rem:it.rem, val:it.val, nonret:it.nonret}; });
 
   withTimeout(call({action:'create',pin:PIN,by:WHO,payload:payload,
                     returnable:true, manualNo:MANUAL_NO,
@@ -522,7 +575,8 @@ function createPass(){
       return;
     }
     setSaveState('saved');
-    MANUAL_NO=false; ADMIN_PIN='';
+    MANUAL_NO=false;
+    if(!ADMIN_MODE) ADMIN_PIN='';   // keep it if non-returnable is unlocked
     say('ok','Gate pass '+esc(f.gp)+' recorded',
         r.count+' item row'+(r.count>1?'s':'')+' written from row '+
         r.firstRow+' \u00b7 status '+esc(r.status)+'. Print it below.');
@@ -742,6 +796,8 @@ function findEdit(){
       tr.querySelector('.m-rem').value  = it.rem;
       tr.querySelector('.m-qty').value  = it.qty;
       tr.querySelector('.m-val').value  = it.val;
+      var nr=tr.querySelector('.m-nonret');
+      if(nr) nr.checked = !!it.nonret;
       var u=tr.querySelector('.m-uom');
       for(var k=0;k<u.options.length;k++){
         if(u.options[k].value===it.uom){ u.selectedIndex=k; break; }
@@ -788,7 +844,7 @@ function askEditPin(f,items,payload){
   ap=String(ap).trim();
   if(!ap){ say('bad','No admin PIN entered',''); return; }
 
-  var extras = items.map(function(it){ return {rem:it.rem, val:it.val}; });
+  var extras = items.map(function(it){ return {rem:it.rem, val:it.val, nonret:it.nonret}; });
 
   render(f,items,payload);
   document.getElementById('form').className='hide';
