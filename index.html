@@ -124,8 +124,11 @@
       Create a new gate pass</button>
   </div>
 
-  <div class="who">Scanning as <b id="whoLabel"></b> &middot;
-    <a href="#" onclick="lock();return false;">change</a></div>
+  <div class="who">Scanning as <b id="whoLabel"></b>
+    <span id="adminBadge" class="hide" style="color:var(--amber);font-weight:700">&middot; ADMIN</span>
+    &middot; <a href="#" onclick="lock();return false;">change</a>
+    &middot; <a href="#" id="adminLink" onclick="unlockAdmin();return false;">admin tools</a>
+  </div>
 </div>
 
 <!-- ============ 4A. NEW OUTWARD ============ -->
@@ -146,6 +149,9 @@
   </div>
   <div class="card">
     <button class="green" id="oSave" onclick="saveGateOut()">Record gate out</button>
+    <button class="amber hide" id="oForce" onclick="adminForceGateOut()">
+      Force gate out (Admin &mdash; no gate PIN)</button>
+    <button class="grey hide" id="oEdit" onclick="openFix()">Admin: edit item</button>
     <button class="grey" onclick="backToScan()">Cancel</button>
   </div>
 </div>
@@ -168,19 +174,20 @@
   </div>
   <div class="card">
     <button class="green" id="rSave" onclick="saveReceipt()">Record receipt</button>
-    <button class="grey" onclick="openFix()">Correct a wrong entry</button>
+    <button class="grey" onclick="openFix()">Admin: edit item</button>
     <button class="grey" onclick="backToScan()">Cancel</button>
   </div>
 </div>
 
-<!-- ============ 5. CORRECT A WRONG RECEIPT ============ -->
+<!-- ============ 5. ADMIN: EDIT ITEM (any status) ============ -->
 <div id="fix" class="hide">
   <div class="card">
     <div class="gpno">GATE PASS <span id="fGpNo"></span></div>
-    <div class="lbl" style="margin-top:8px">Set the correct received total</div>
+    <div class="lbl" style="margin-top:8px">Edit name, quantities, or mark non-returnable</div>
     <div class="sub" style="color:var(--dim);font-size:12.5px">
-      Enter what should be on each line, not the amount to remove.
-      A line wrongly showing 6 that should be 2 &mdash; type 2.
+      Change whatever is wrong on each line &mdash; name, unit, out qty
+      or received total &mdash; then save. Works whatever the pass
+      status is. Non-returnable closes the line as soon as it is out.
     </div>
     <div id="fItems" style="margin-top:10px"></div>
   </div>
@@ -188,8 +195,8 @@
     <div class="lbl">Admin PIN</div>
     <input id="fixPin" class="pin" type="tel" inputmode="numeric" maxlength="8"
            autocomplete="off" placeholder="&bull;&bull;&bull;&bull;">
-    <button class="green" id="fSave" onclick="saveFix()">Save correction</button>
-    <button class="grey" onclick="showReceipt()">Back</button>
+    <button class="green" id="fSave" onclick="saveFix()">Save changes</button>
+    <button class="grey" onclick="backToScan()">Back</button>
   </div>
 </div>
 
@@ -204,6 +211,7 @@ var lastCode='', lastAt=0;
 var PIN='', WHO='';
 var CURRENT=null;      // last lookup result
 var PAYLOAD='';        // raw scanned text
+var ADMIN_MODE=false, ADMIN_PIN='';   // set by unlockAdmin(), cleared by lock()
 
 /* ---------- server ----------
    Content-Type is left as text/plain so this stays a "simple"
@@ -252,9 +260,41 @@ function unlock(){
 
 function lock(){
   stop(); PIN=''; WHO=''; CURRENT=null;
+  ADMIN_MODE=false; ADMIN_PIN='';
+  document.getElementById('adminBadge').className='hide';
   document.getElementById('pin').value='';
   show('gate');
   document.getElementById('status').className='status';
+}
+
+/* ---------- admin unlock ---------- */
+function unlockAdmin(){
+  if(ADMIN_MODE){
+    say('ok','Admin tools already unlocked',
+        'Open a gate pass to force a gate out or edit an item.');
+    return;
+  }
+  var ap=prompt('Admin PIN:');
+  if(ap===null) return;
+  ap=String(ap).trim();
+  if(!ap){ say('bad','No admin PIN entered',''); return; }
+
+  say('busy','Checking the admin PIN\u2026','');
+  call({action:'admin',pin:PIN,adminPin:ap}).then(function(r){
+    if(r.authFail){ lock(); say('bad','Session locked',esc(r.msg)); return; }
+    if(!r.ok){ say('bad','Not unlocked',esc(r.msg||'Admin PIN is wrong.')); return; }
+    ADMIN_MODE=true; ADMIN_PIN=ap;
+    document.getElementById('adminBadge').className='';
+    ['oForce','oEdit'].forEach(function(id){
+      var b=document.getElementById(id);
+      if(b) b.classList.remove('hide');
+    });
+    say('ok','Admin tools unlocked',
+        'Force gate out, force gate in and item edits are now available '+
+        'on any gate pass you open.');
+  }).catch(function(e){
+    say('bad','Cannot reach the server', esc(String(e)));
+  });
 }
 
 /* ---------- camera ---------- */
@@ -346,7 +386,9 @@ function showGateOut(){
 
   document.getElementById('oItems').innerHTML = r.rows.map(function(it,i){
     return '<div class="it">'+
-      '<div class="nm">'+(i+1)+'. '+esc(it.name)+'</div>'+
+      '<div class="nm">'+(i+1)+'. '+esc(it.name)+
+        (it.nonret ? ' <span class="pill n">NON-RETURNABLE</span>' : '')+
+        '</div>'+
       '<div class="sub">On the pass: '+it.planned+' '+esc(it.uom)+'</div>'+
       '<div class="ctl">'+
       '<input type="checkbox" id="gk'+i+'" checked onchange="syncOut('+i+')">'+
@@ -422,6 +464,46 @@ function saveGateOut(){
   });
 }
 
+/** Admin-only: gate out without the gate PIN, and works even if this
+ *  pass has already gone out (re-sets OUT QTY instead of being refused). */
+function adminForceGateOut(){
+  if(busy) return;
+  if(!ADMIN_MODE){ say('bad','Admin tools are locked','Tap "admin tools" first.'); return; }
+
+  var lines=[];
+  CURRENT.rows.forEach(function(it,i){
+    var ck=document.getElementById('gk'+i);
+    if(!ck || !ck.checked) return;
+    var q=Number(document.getElementById('gq'+i).value);
+    if(q>=0) lines.push({row:it.row, qty:q});
+  });
+
+  if(!lines.length){ say('bad','Nothing selected',
+      'Tick at least one item, or cancel.'); return; }
+
+  busy=true;
+  document.getElementById('oForce').disabled=true;
+  say('busy','Forcing gate out\u2026','');
+
+  call({action:'admingateout',pin:PIN,by:WHO,gpNo:CURRENT.gpNo,
+        lines:lines,adminPin:ADMIN_PIN})
+  .then(function(r){
+    busy=false;
+    document.getElementById('oForce').disabled=false;
+    if(r.authFail){ lock(); say('bad','Session locked',esc(r.msg)); return; }
+    if(r.adminFail){ say('bad','Not released',esc(r.msg)); return; }
+    if(!r.ok){ say('bad','Not recorded',esc(r.msg)); return; }
+    if(navigator.vibrate) navigator.vibrate([50,60,50]);
+    say('ok','Forced gate out \u2014 GP '+esc(r.gpNo),
+        r.count+' item'+(r.count>1?'s':'')+' out \u00b7 no gate PIN used.');
+    setTimeout(backToScan,2000);
+  }).catch(function(e){
+    busy=false;
+    document.getElementById('oForce').disabled=false;
+    say('bad','Connection problem',esc(String(e))+'<br>Nothing was recorded.');
+  });
+}
+
 /* ---------- 4B: receipt ---------- */
 function showReceipt(){
   var r=CURRENT;
@@ -431,7 +513,9 @@ function showReceipt(){
   document.getElementById('rItems').innerHTML = r.rows.map(function(it,i){
     var done = it.balance<=0;
     return '<div class="it'+(done?' done':'')+'">'+
-      '<div class="nm">'+(i+1)+'. '+esc(it.name)+'</div>'+
+      '<div class="nm">'+(i+1)+'. '+esc(it.name)+
+        (it.nonret ? ' <span class="pill n">NON-RETURNABLE</span>' : '')+
+        '</div>'+
       '<div class="sub">Out '+it.out+' '+esc(it.uom)+
         ' &middot; back '+it.received+
         ' &middot; pending <b>'+it.balance+'</b> '+
@@ -517,30 +601,41 @@ function saveReceipt(){
   });
 }
 
-/* ---------- correcting a wrong receipt ---------- */
+/* ---------- admin: edit item (name / qty / non-returnable, any status) ---------- */
 
 function openFix(){
   var r=CURRENT;
   document.getElementById('fGpNo').textContent=r.gpNo;
-  document.getElementById('fixPin').value='';
+  document.getElementById('fixPin').value=ADMIN_MODE ? ADMIN_PIN : '';
 
   document.getElementById('fItems').innerHTML = r.rows.map(function(it,i){
     return '<div class="it">'+
-      '<div class="nm">'+(i+1)+'. '+esc(it.name)+'</div>'+
+      '<div class="nm">'+(i+1)+
+        '. <input type="text" id="fn'+i+'" value="'+esc(it.name)+'" '+
+          'style="display:inline-block;width:auto;min-width:60%;padding:6px 8px">'+
+        '</div>'+
       '<div class="sub">Out '+it.out+' '+esc(it.uom)+
         ' &middot; currently recorded back <b>'+it.received+'</b></div>'+
+      '<div class="ctl" style="flex-wrap:wrap">'+
+      '<label for="fu'+i+'">Unit</label>'+
+      '<input type="text" id="fu'+i+'" value="'+esc(it.uom)+'" '+
+             'style="width:70px;text-align:center">'+
+      '<label for="fo'+i+'">Out</label>'+
+      '<input type="number" id="fo'+i+'" min="0" value="'+it.out+'">'+
+      '<label for="fx'+i+'">Back</label>'+
+      '<input type="number" id="fx'+i+'" min="0" value="'+it.received+'">'+
+      '</div>'+
       '<div class="ctl">'+
-      '<label for="fx'+i+'">Correct total</label>'+
-      '<input type="number" id="fx'+i+'" min="0" max="'+it.out+'" '+
-             'value="'+it.received+'">'+
-      '<span class="sub">'+esc(it.uom)+' of '+it.out+'</span></div>'+
+      '<input type="checkbox" id="fr'+i+'"'+(it.nonret?' checked':'')+'>'+
+      '<label for="fr'+i+'">Non-returnable</label>'+
+      '</div>'+
       '</div>';
   }).join('');
 
   show('fix');
-  say('busy','Correcting gate pass '+esc(r.gpNo),
-      'This changes what is on record. The admin PIN is required and the '+
-      'change is kept in the receipt history.');
+  say('busy','Editing gate pass '+esc(r.gpNo),
+      'Change whatever is wrong, then save. The admin PIN is required and '+
+      'every change is kept in the receipt history.');
 }
 
 function saveFix(){
@@ -548,29 +643,29 @@ function saveFix(){
 
   var ap=document.getElementById('fixPin').value.trim();
   if(!ap){
-    say('bad','Admin PIN needed','Corrections have to be authorised.');
+    say('bad','Admin PIN needed','Edits have to be authorised.');
     document.getElementById('fixPin').focus();
     return;
   }
 
-  var lines=[], any=false;
+  var lines=[];
   CURRENT.rows.forEach(function(it,i){
-    var v=Number(document.getElementById('fx'+i).value);
-    if(isNaN(v) || v<0) return;
-    lines.push({row:it.row, qty:Math.min(v, it.out)});
-    if(v!==it.received) any=true;
+    var name=document.getElementById('fn'+i).value.trim();
+    var uom=document.getElementById('fu'+i).value.trim();
+    var outQ=Number(document.getElementById('fo'+i).value);
+    var inQ=Number(document.getElementById('fx'+i).value);
+    var nonret=document.getElementById('fr'+i).checked;
+    lines.push({row:it.row, name:name, uom:uom,
+                outQty:isNaN(outQ)?undefined:outQ,
+                inQty:isNaN(inQ)?undefined:inQ,
+                nonret:nonret});
   });
-
-  if(!any){
-    say('bad','Nothing changed','Change at least one quantity, or go back.');
-    return;
-  }
 
   busy=true;
   document.getElementById('fSave').disabled=true;
-  say('busy','Saving correction\u2026','');
+  say('busy','Saving changes\u2026','');
 
-  call({action:'fixrec',pin:PIN,by:WHO,adminPin:ap,
+  call({action:'adminedit',pin:PIN,by:WHO,adminPin:ap,
         gpNo:CURRENT.gpNo,lines:lines})
   .then(function(r){
     busy=false;
@@ -580,13 +675,13 @@ function saveFix(){
       if(navigator.vibrate) navigator.vibrate([120,80,120]);
       document.getElementById('fixPin').value='';
       document.getElementById('fixPin').focus();
-      say('bad','Not corrected',esc(r.msg));
+      say('bad','Not saved',esc(r.msg));
       return;
     }
-    if(!r.ok){ say('bad','Not corrected',esc(r.msg)); return; }
+    if(!r.ok){ say('bad','Nothing to save',esc(r.msg)); return; }
 
     if(navigator.vibrate) navigator.vibrate([50,60,50]);
-    say('ok','Corrected \u2014 GP '+esc(r.gpNo),
+    say('ok','Saved \u2014 GP '+esc(r.gpNo),
         r.changed+' line'+(r.changed>1?'s':'')+' changed \u00b7 '+
         esc(r.notes)+'<br>The change is recorded in the receipt history.');
     setTimeout(backToScan,2400);
