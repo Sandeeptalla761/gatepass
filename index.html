@@ -174,6 +174,8 @@
   </div>
   <div class="card">
     <button class="green" id="rSave" onclick="saveReceipt()">Record receipt</button>
+    <button class="amber hide" id="rForce" onclick="showGateOut()">
+      Force gate out (Admin)</button>
     <button class="grey" onclick="openFix()">Admin: edit item</button>
     <button class="grey" onclick="backToScan()">Cancel</button>
   </div>
@@ -285,7 +287,7 @@ function unlockAdmin(){
     if(!r.ok){ say('bad','Not unlocked',esc(r.msg||'Admin PIN is wrong.')); return; }
     ADMIN_MODE=true; ADMIN_PIN=ap;
     document.getElementById('adminBadge').className='';
-    ['oForce','oEdit'].forEach(function(id){
+    ['oForce','oEdit','rForce'].forEach(function(id){
       var b=document.getElementById(id);
       if(b) b.classList.remove('hide');
     });
@@ -379,32 +381,50 @@ function headerHtml(r){
 
 function showGateOut(){
   var r=CURRENT;
+  var alreadyOut = r.mode !== 'gateout';   // reached here via Force gate out
+
   document.getElementById('oGp').textContent=r.gpNo;
   document.getElementById('oHdr').innerHTML =
     headerHtml(r) +
-    '<div style="margin-top:9px"><span class="pill y">PENDING GATE OUT</span></div>';
+    '<div style="margin-top:9px">'+
+    (alreadyOut
+      ? (statusPill(r.rows[0] ? r.rows[0].status : '') ||
+         '<span class="pill n">ALREADY OUT</span>')
+      : '<span class="pill y">PENDING GATE OUT</span>')+
+    '</div>';
 
   document.getElementById('oItems').innerHTML = r.rows.map(function(it,i){
+    var startQty = it.out > 0 ? it.out : it.planned;
     return '<div class="it">'+
       '<div class="nm">'+(i+1)+'. '+esc(it.name)+
         (it.nonret ? ' <span class="pill n">NON-RETURNABLE</span>' : '')+
         '</div>'+
-      '<div class="sub">On the pass: '+it.planned+' '+esc(it.uom)+'</div>'+
+      '<div class="sub">'+(alreadyOut
+          ? 'Currently on record as out: '+it.out+' '+esc(it.uom)+
+            ' &middot; back '+it.received
+          : 'On the pass: '+it.planned+' '+esc(it.uom))+'</div>'+
       '<div class="ctl">'+
       '<input type="checkbox" id="gk'+i+'" checked onchange="syncOut('+i+')">'+
       '<label for="gk'+i+'">Going out</label>'+
-      '<input type="number" id="gq'+i+'" min="0" value="'+it.planned+'">'+
+      '<input type="number" id="gq'+i+'" min="0" value="'+startQty+'">'+
       '<span class="sub">'+esc(it.uom)+'</span></div>'+
       '</div>';
   }).join('');
 
   document.getElementById('oSave').textContent =
     'Record gate out \u2014 '+r.rows.length+' item'+(r.rows.length>1?'s':'');
+  document.getElementById('oSave').className = alreadyOut ? 'hide' : 'green';
+  document.getElementById('gatePin').parentNode.className =
+    alreadyOut ? 'card hide' : 'card';
+
   show('outward');
   document.getElementById('gatePin').value='';
-  say('busy','Material going out',
-      'Check each quantity against what is physically leaving, enter the '+
-      'gate PIN, then record it.');
+  say('busy', alreadyOut ? 'Admin: re-set OUT QTY' : 'Material going out',
+      alreadyOut
+        ? 'This pass has already gone out. Use <b>Force gate out</b> below '+
+          'to correct the quantities \u2014 IN QTY already recorded is kept.'
+        : 'Check each quantity against what is physically leaving, enter '+
+          'the gate PIN, then record it.');
 }
 
 function syncOut(i){
